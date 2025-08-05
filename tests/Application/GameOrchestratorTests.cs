@@ -12,27 +12,36 @@ public class GameOrchestratorTests
 {
     private readonly Mock<IGameService> _mockGameService;
     private readonly Mock<IUserInterface> _mockUserInterface;
+    private readonly Mock<IErrorHandler> _mockErrorHandler;
     private readonly GameOrchestrator _gameOrchestrator;
 
     public GameOrchestratorTests()
     {
         _mockGameService = new Mock<IGameService>();
         _mockUserInterface = new Mock<IUserInterface>();
-        _gameOrchestrator = new GameOrchestrator(_mockGameService.Object, _mockUserInterface.Object);
+        _mockErrorHandler = new Mock<IErrorHandler>();
+        _gameOrchestrator = new GameOrchestrator(_mockGameService.Object, _mockUserInterface.Object, _mockErrorHandler.Object);
     }
 
     [Fact]
     public void Constructor_WithNullGameService_ThrowsArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new GameOrchestrator(null!, _mockUserInterface.Object));
+        Assert.Throws<ArgumentNullException>(() => new GameOrchestrator(null!, _mockUserInterface.Object, _mockErrorHandler.Object));
     }
 
     [Fact]
     public void Constructor_WithNullUserInterface_ThrowsArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new GameOrchestrator(_mockGameService.Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new GameOrchestrator(_mockGameService.Object, null!, _mockErrorHandler.Object));
+    }
+
+    [Fact]
+    public void Constructor_WithNullErrorHandler_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new GameOrchestrator(_mockGameService.Object, _mockUserInterface.Object, null!));
     }
 
     [Fact]
@@ -217,16 +226,22 @@ public class GameOrchestratorTests
         // Arrange
         var playerNames = new[] { "Alice" };
         var expectedException = new InvalidOperationException("Test exception");
+        var userFriendlyMessage = "An unexpected error occurred. Please try again or restart the game.";
 
         _mockUserInterface.Setup(ui => ui.GetPlayerCountAsync()).ReturnsAsync(1);
         _mockUserInterface.Setup(ui => ui.GetPlayerNamesAsync(1)).ReturnsAsync(playerNames);
         _mockGameService.Setup(gs => gs.StartNewGame(playerNames)).Throws(expectedException);
+        _mockErrorHandler.Setup(eh => eh.HandleExceptionAsync(expectedException, "RunGameAsync"))
+                         .ReturnsAsync(userFriendlyMessage);
+        _mockErrorHandler.Setup(eh => eh.IsRecoverableError(expectedException)).Returns(false);
 
         // Act & Assert
         var actualException = await Assert.ThrowsAsync<InvalidOperationException>(() => _gameOrchestrator.RunGameAsync());
         
         Assert.Same(expectedException, actualException);
-        _mockUserInterface.Verify(ui => ui.ShowErrorMessageAsync("An error occurred during the game: Test exception"), Times.Once);
+        _mockUserInterface.Verify(ui => ui.ShowErrorMessageAsync(userFriendlyMessage), Times.Once);
+        _mockErrorHandler.Verify(eh => eh.HandleExceptionAsync(expectedException, "RunGameAsync"), Times.Once);
+        _mockErrorHandler.Verify(eh => eh.IsRecoverableError(expectedException), Times.Once);
     }
 
     [Fact]

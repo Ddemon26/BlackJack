@@ -64,6 +64,7 @@ public static class ServiceCollectionExtensions
         // Register application services
         services.AddScoped<IGameService, GameService>();
         services.AddScoped<IGameOrchestrator, GameOrchestrator>();
+        services.AddScoped<IErrorHandler, ErrorHandler>();
         
         // Register presentation services
         services.AddScoped<IUserInterface, ConsoleUserInterface>();
@@ -120,6 +121,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IGameService, GameService>();
         services.AddScoped<IGameOrchestrator, GameOrchestrator>();
+        services.AddScoped<IErrorHandler, ErrorHandler>();
         
         return services;
     }

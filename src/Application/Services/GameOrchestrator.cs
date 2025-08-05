@@ -2,6 +2,7 @@ using GroupProject.Application.Interfaces;
 using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Domain.Exceptions;
 
 namespace GroupProject.Application.Services;
 
@@ -12,16 +13,19 @@ public class GameOrchestrator : IGameOrchestrator
 {
     private readonly IGameService _gameService;
     private readonly IUserInterface _userInterface;
+    private readonly IErrorHandler _errorHandler;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GameOrchestrator"/> class.
     /// </summary>
     /// <param name="gameService">The game service for core game logic.</param>
     /// <param name="userInterface">The user interface for player interaction.</param>
-    public GameOrchestrator(IGameService gameService, IUserInterface userInterface)
+    /// <param name="errorHandler">The error handler for managing exceptions.</param>
+    public GameOrchestrator(IGameService gameService, IUserInterface userInterface, IErrorHandler errorHandler)
     {
         _gameService = gameService ?? throw new ArgumentNullException(nameof(gameService));
         _userInterface = userInterface ?? throw new ArgumentNullException(nameof(userInterface));
+        _errorHandler = errorHandler ?? throw new ArgumentNullException(nameof(errorHandler));
     }
 
     /// <inheritdoc />
@@ -52,8 +56,13 @@ public class GameOrchestrator : IGameOrchestrator
         }
         catch (Exception ex)
         {
-            await _userInterface.ShowErrorMessageAsync($"An error occurred during the game: {ex.Message}");
-            throw;
+            await HandleGameExceptionAsync(ex, "RunGameAsync");
+            
+            // Only re-throw if it's not a recoverable error
+            if (!_errorHandler.IsRecoverableError(ex))
+            {
+                throw;
+            }
         }
     }
 
@@ -66,21 +75,39 @@ public class GameOrchestrator : IGameOrchestrator
     /// <inheritdoc />
     public async Task RunMultipleRoundsAsync()
     {
-        await _userInterface.ShowWelcomeMessageAsync();
-
-        do
+        try
         {
-            await RunGameAsync();
-            
-            if (!await ShouldPlayAnotherRoundAsync())
+            await _userInterface.ShowWelcomeMessageAsync();
+
+            do
             {
-                break;
-            }
+                try
+                {
+                    await RunGameAsync();
+                }
+                catch (Exception ex) when (_errorHandler.IsRecoverableError(ex))
+                {
+                    // For recoverable errors, show message and continue to next round prompt
+                    var userMessage = await _errorHandler.HandleExceptionAsync(ex, "RunMultipleRoundsAsync - Game Round");
+                    await _userInterface.ShowErrorMessageAsync(userMessage);
+                    await _userInterface.ShowMessageAsync("Let's try starting a new game...");
+                }
+                
+                if (!await ShouldPlayAnotherRoundAsync())
+                {
+                    break;
+                }
 
-            await _userInterface.ShowMessageAsync("\n" + new string('=', 50) + "\n");
-        } while (true);
+                await _userInterface.ShowMessageAsync("\n" + new string('=', 50) + "\n");
+            } while (true);
 
-        await _userInterface.ShowMessageAsync("Thanks for playing!");
+            await _userInterface.ShowMessageAsync("Thanks for playing!");
+        }
+        catch (Exception ex)
+        {
+            await HandleGameExceptionAsync(ex, "RunMultipleRoundsAsync");
+            throw; // Re-throw for application-level handling
+        }
     }
 
     /// <inheritdoc />
@@ -130,68 +157,93 @@ public class GameOrchestrator : IGameOrchestrator
 
     private async Task HandleSinglePlayerTurnAsync(Player player)
     {
-        while (_gameService.IsPlayerTurn(player.Name))
+        try
         {
-            await _userInterface.ShowMessageAsync($"\n{player.Name}'s turn:");
-            await _userInterface.ShowPlayerHandAsync(player);
-
-            // Check if player is busted or has 21
-            if (player.IsBusted())
+            while (_gameService.IsPlayerTurn(player.Name))
             {
-                await _userInterface.ShowMessageAsync($"{player.Name} is busted!");
-                break;
-            }
-
-            if (player.GetHandValue() == 21)
-            {
-                await _userInterface.ShowMessageAsync($"{player.Name} has 21!");
-                break;
-            }
-
-            // Get valid actions
-            var validActions = GetValidActionsForPlayer(player);
-            if (!validActions.Any())
-            {
-                break;
-            }
-
-            // Get player action
-            var action = await _userInterface.GetPlayerActionAsync(player.Name, validActions);
-
-            // Process the action
-            var result = _gameService.ProcessPlayerAction(player.Name, action);
-
-            if (!result.IsSuccess)
-            {
-                await _userInterface.ShowErrorMessageAsync(result.ErrorMessage!);
-                continue;
-            }
-
-            // Show result of action
-            if (action == PlayerAction.Hit)
-            {
-                await _userInterface.ShowMessageAsync($"{player.Name} hits.");
+                await _userInterface.ShowMessageAsync($"\n{player.Name}'s turn:");
                 await _userInterface.ShowPlayerHandAsync(player);
 
-                if (result.IsBusted)
+                // Check if player is busted or has 21
+                if (player.IsBusted())
                 {
                     await _userInterface.ShowMessageAsync($"{player.Name} is busted!");
+                    break;
                 }
-                else if (result.UpdatedHand?.GetValue() == 21)
+
+                if (player.GetHandValue() == 21)
                 {
                     await _userInterface.ShowMessageAsync($"{player.Name} has 21!");
+                    break;
+                }
+
+                // Get valid actions
+                var validActions = GetValidActionsForPlayer(player);
+                if (!validActions.Any())
+                {
+                    break;
+                }
+
+                try
+                {
+                    // Get player action
+                    var action = await _userInterface.GetPlayerActionAsync(player.Name, validActions);
+
+                    // Process the action
+                    var result = _gameService.ProcessPlayerAction(player.Name, action);
+
+                    if (!result.IsSuccess)
+                    {
+                        await _userInterface.ShowErrorMessageAsync(result.ErrorMessage!);
+                        continue;
+                    }
+
+                    // Show result of action
+                    if (action == PlayerAction.Hit)
+                    {
+                        await _userInterface.ShowMessageAsync($"{player.Name} hits.");
+                        await _userInterface.ShowPlayerHandAsync(player);
+
+                        if (result.IsBusted)
+                        {
+                            await _userInterface.ShowMessageAsync($"{player.Name} is busted!");
+                        }
+                        else if (result.UpdatedHand?.GetValue() == 21)
+                        {
+                            await _userInterface.ShowMessageAsync($"{player.Name} has 21!");
+                        }
+                    }
+                    else if (action == PlayerAction.Stand)
+                    {
+                        await _userInterface.ShowMessageAsync($"{player.Name} stands.");
+                    }
+
+                    // Check if turn should continue
+                    if (!result.ShouldContinueTurn)
+                    {
+                        break;
+                    }
+                }
+                catch (InvalidPlayerActionException ex)
+                {
+                    // Handle invalid player actions gracefully
+                    var userMessage = await _errorHandler.HandleExceptionAsync(ex, $"HandleSinglePlayerTurnAsync - {player.Name}");
+                    await _userInterface.ShowErrorMessageAsync(userMessage);
+                    // Continue the loop to let the player try again
+                }
+                catch (InvalidGameStateException ex)
+                {
+                    // Handle invalid game state - this might end the player's turn
+                    var userMessage = await _errorHandler.HandleExceptionAsync(ex, $"HandleSinglePlayerTurnAsync - {player.Name}");
+                    await _userInterface.ShowErrorMessageAsync(userMessage);
+                    break; // End this player's turn
                 }
             }
-            else if (action == PlayerAction.Stand)
-            {
-                await _userInterface.ShowMessageAsync($"{player.Name} stands.");
-            }
-
-            // Check if turn should continue
-            if (!result.ShouldContinueTurn)
-            {
-                break;
-            }
+        }
+        catch (Exception ex)
+        {
+            await HandleGameExceptionAsync(ex, $"HandleSinglePlayerTurnAsync - {player.Name}");
+            // Don't re-throw here as we want to continue with other players
         }
     }
 
@@ -232,9 +284,10 @@ public class GameOrchestrator : IGameOrchestrator
             var results = _gameService.GetGameResults();
             await _userInterface.ShowGameResultsAsync(results);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
-            await _userInterface.ShowErrorMessageAsync($"Could not get game results: {ex.Message}");
+            var userMessage = await _errorHandler.HandleExceptionAsync(ex, "ShowGameResultsAsync");
+            await _userInterface.ShowErrorMessageAsync(userMessage);
         }
     }
 
@@ -260,5 +313,16 @@ public class GameOrchestrator : IGameOrchestrator
         // if (canSplit) validActions.Add(PlayerAction.Split);
 
         return validActions;
+    }
+
+    /// <summary>
+    /// Handles exceptions that occur during game operations by logging and showing user-friendly messages.
+    /// </summary>
+    /// <param name="exception">The exception to handle.</param>
+    /// <param name="context">The context where the exception occurred.</param>
+    private async Task HandleGameExceptionAsync(Exception exception, string context)
+    {
+        var userMessage = await _errorHandler.HandleExceptionAsync(exception, context);
+        await _userInterface.ShowErrorMessageAsync(userMessage);
     }
 }

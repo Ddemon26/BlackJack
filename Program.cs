@@ -1,5 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using GroupProject.Application.Interfaces;
+using GroupProject.Infrastructure.Extensions;
+
 namespace GroupProject;
 
 internal static class Program {
@@ -9,54 +12,144 @@ internal static class Program {
     const string TEST_DECK = "--testdeck";
     const string TEST_PLAYER = "--testplayer";
 
-    static int Main(string[] args) {
-        string[] processedArgs = ProcessArgs(args);
-        
-        switch (processedArgs.Length) {
-            case > 0 when processedArgs[0].Equals(HELLO_WORLD):
-            {
-                using var host = Host<Something>();
-                var something = host.Services.GetRequiredService<Something>();
-                something.DoSomething();
-                break;
+    static async Task<int> Main(string[] args) {
+        try
+        {
+            string[] processedArgs = ProcessArgs(args);
+            
+            switch (processedArgs.Length) {
+                case > 0 when processedArgs[0].Equals(HELLO_WORLD):
+                {
+                    await RunWithGlobalErrorHandling(() => RunHelloWorldAsync());
+                    break;
+                }
+                case > 0 when processedArgs[0].Equals(BLACKJACK):
+                {
+                    await RunWithGlobalErrorHandling(() => RunBlackjackGameAsync());
+                    break;
+                }
+                case > 0 when processedArgs[0].Equals(TEST_HAND):
+                {
+                    await RunWithGlobalErrorHandling(() => Task.Run(RunHandTests));
+                    break;
+                }
+                case > 0 when processedArgs[0].Equals(TEST_DECK):
+                {
+                    await RunWithGlobalErrorHandling(() => Task.Run(RunDeckTests));
+                    break;
+                }
+                case > 0 when processedArgs[0].Equals(TEST_PLAYER):
+                {
+                    await RunWithGlobalErrorHandling(() => Task.Run(RunPlayerTests));
+                    break;
+                }
+                default:
+                {
+                    Console.WriteLine("Available commands:");
+                    Console.WriteLine("  --helloworld  : Run hello world example");
+                    Console.WriteLine("  --blackjack   : Start blackjack game");
+                    Console.WriteLine("  --testhand    : Run Hand class tests");
+                    Console.WriteLine("  --testdeck    : Run Deck and Shoe class tests");
+                    Console.WriteLine("  --testplayer  : Run Player class tests");
+                    break;
+                }
             }
-            case > 0 when processedArgs[0].Equals(BLACKJACK):
-            {
-                Console.WriteLine("Blackjack game is being refactored. Please check back later!");
-                break;
-            }
-            case > 0 when processedArgs[0].Equals(TEST_HAND):
-            {
-                RunHandTests();
-                break;
-            }
-            case > 0 when processedArgs[0].Equals(TEST_DECK):
-            {
-                RunDeckTests();
-                break;
-            }
-            case > 0 when processedArgs[0].Equals(TEST_PLAYER):
-            {
-                RunPlayerTests();
-                break;
-            }
-            default:
-            {
-                Console.WriteLine("Available commands:");
-                Console.WriteLine("  --helloworld  : Run hello world example");
-                Console.WriteLine("  --blackjack   : Start blackjack game");
-                Console.WriteLine("  --testhand    : Run Hand class tests");
-                Console.WriteLine("  --testdeck    : Run Deck and Shoe class tests");
-                Console.WriteLine("  --testplayer  : Run Player class tests");
-                break;
-            }
-        }
 
-        return 0;
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            // Final fallback error handling
+            Console.WriteLine($"[FATAL ERROR] An unrecoverable error occurred: {ex.Message}");
+            Console.WriteLine("The application will now exit.");
+            return 1;
+        }
     }
 
-    // Blackjack game functionality temporarily disabled during refactoring
-    // Will be replaced with new architecture implementation
+    /// <summary>
+    /// Runs the specified operation with global error handling.
+    /// </summary>
+    /// <param name="operation">The operation to run.</param>
+    static async Task RunWithGlobalErrorHandling(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (Exception ex)
+        {
+            // Try to use the error handler if available
+            try
+            {
+                using var host = CreateBlackjackHost();
+                var errorHandler = host.Services.GetService<IErrorHandler>();
+                
+                if (errorHandler != null)
+                {
+                    var userMessage = await errorHandler.HandleExceptionAsync(ex, "Application Main");
+                    Console.WriteLine($"Error: {userMessage}");
+                }
+                else
+                {
+                    Console.WriteLine($"An error occurred: {ex.Message}");
+                }
+            }
+            catch
+            {
+                // Fallback if error handler fails
+                Console.WriteLine($"An error occurred: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs the hello world example.
+    /// </summary>
+    static async Task RunHelloWorldAsync()
+    {
+        using var host = Host<Something>();
+        var something = host.Services.GetRequiredService<Something>();
+        await Task.Run(() => something.DoSomething());
+    }
+
+    /// <summary>
+    /// Runs the blackjack game with full error handling.
+    /// </summary>
+    static async Task RunBlackjackGameAsync()
+    {
+        using var host = CreateBlackjackHost();
+        var gameOrchestrator = host.Services.GetRequiredService<IGameOrchestrator>();
+        
+        try
+        {
+            await gameOrchestrator.RunMultipleRoundsAsync();
+        }
+        catch (Exception ex)
+        {
+            var errorHandler = host.Services.GetRequiredService<IErrorHandler>();
+            var userMessage = await errorHandler.HandleExceptionAsync(ex, "Blackjack Game");
+            Console.WriteLine($"Game Error: {userMessage}");
+            
+            if (!errorHandler.IsRecoverableError(ex))
+            {
+                Console.WriteLine("The game cannot continue and will now exit.");
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a host configured for the blackjack game.
+    /// </summary>
+    /// <returns>A configured host for the blackjack application.</returns>
+    static IHost CreateBlackjackHost()
+    {
+        return new HostBuilder()
+            .ConfigureServices((_, services) => {
+                services.AddBlackjackServices();
+            })
+            .Build();
+    }
     
     static void RunHandTests()
     {
