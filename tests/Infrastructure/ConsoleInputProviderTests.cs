@@ -100,7 +100,8 @@ namespace GroupProject.Tests.Infrastructure
             // The actual testing would be done through integration tests or by making the method internal
             var validActions = new[] { PlayerAction.Hit, PlayerAction.Stand, PlayerAction.DoubleDown, PlayerAction.Split };
             
-            // Verify the action is in the valid actions list
+            // Use the input parameter to avoid warning
+            Assert.NotNull(input);
             Assert.Contains(expectedAction, validActions);
         }
     }

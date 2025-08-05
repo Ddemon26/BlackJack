@@ -30,18 +30,16 @@ public class GameServiceIntegrationTests
     public void CompleteGameFlow_SinglePlayer_PlayerWins()
     {
         // Arrange - Set up a scenario where player gets 20 and dealer gets 19
-        var playerCards = new[]
+        // Cards are dealt in order: Player1, Dealer1, Player2, Dealer2
+        var cardsInDealOrder = new[]
         {
             new Card(Suit.Hearts, Rank.Ten),    // Player first card
-            new Card(Suit.Spades, Rank.Ten)     // Player second card (20)
-        };
-        var dealerCards = new[]
-        {
             new Card(Suit.Diamonds, Rank.Nine), // Dealer first card
-            new Card(Suit.Clubs, Rank.Ten)      // Dealer second card (19)
+            new Card(Suit.Spades, Rank.Ten),    // Player second card (total: 20)
+            new Card(Suit.Clubs, Rank.Ten)      // Dealer second card (total: 19)
         };
 
-        _randomProvider.SetPredeterminedCards(playerCards.Concat(dealerCards).ToArray());
+        _randomProvider.SetPredeterminedCards(cardsInDealOrder);
 
         // Act - Complete game flow
         _gameService.StartNewGame(new[] { "Alice" });
@@ -438,12 +436,10 @@ public class GameServiceIntegrationTests
     private class TestRandomProvider : IRandomProvider
     {
         private Card[]? _predeterminedCards;
-        private int _cardIndex = 0;
 
         public void SetPredeterminedCards(Card[] cards)
         {
             _predeterminedCards = cards;
-            _cardIndex = 0;
         }
 
         public int Next(int minValue, int maxValue)
@@ -453,17 +449,20 @@ public class GameServiceIntegrationTests
 
         public void Shuffle<T>(IList<T> list)
         {
-            if (_predeterminedCards != null && list is List<Card> cardList && typeof(T) == typeof(Card))
+            if (_predeterminedCards != null && typeof(T) == typeof(Card))
             {
-                // Replace the list contents with our predetermined cards
-                cardList.Clear();
-                cardList.AddRange(_predeterminedCards);
-                
-                // Clear the generic list and add our cards
+                // Clear the list and add our predetermined cards multiple times
                 list.Clear();
-                foreach (var card in _predeterminedCards)
+                
+                // Add predetermined cards enough times to ensure we have plenty for any test
+                // We need at least 4 cards for initial deal, but dealer might need more
+                int repetitions = Math.Max(20, 52 / _predeterminedCards.Length + 1);
+                for (int i = 0; i < repetitions; i++)
                 {
-                    list.Add((T)(object)card);
+                    foreach (var card in _predeterminedCards)
+                    {
+                        list.Add((T)(object)card);
+                    }
                 }
             }
             // Otherwise do nothing (no shuffling for predictable tests)

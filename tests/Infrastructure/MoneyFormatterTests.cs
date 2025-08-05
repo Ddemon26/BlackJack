@@ -211,7 +211,7 @@ public class MoneyFormatterTests
     public void FormatMultiple_WithNullCollection_ReturnsEmptyString()
     {
         // Act
-        var result = MoneyFormatter.FormatMultiple(null);
+        var result = MoneyFormatter.FormatMultiple(null!);
 
         // Assert
         Assert.Equal(string.Empty, result);

@@ -109,7 +109,7 @@ namespace GroupProject.Tests.Application
         public void IsRecoverableError_WithNullException_ReturnsFalse()
         {
             // Act
-            var result = _errorHandler.IsRecoverableError(null);
+            var result = _errorHandler.IsRecoverableError(null!);
 
             // Assert
             Assert.False(result);
@@ -138,7 +138,7 @@ namespace GroupProject.Tests.Application
         public void GetUserFriendlyMessage_WithNullException_ReturnsGenericMessage()
         {
             // Act
-            var result = _errorHandler.GetUserFriendlyMessage(null);
+            var result = _errorHandler.GetUserFriendlyMessage(null!);
 
             // Assert
             Assert.Equal("An unknown error occurred.", result);
