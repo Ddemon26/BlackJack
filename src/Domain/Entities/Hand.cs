@@ -1,13 +1,17 @@
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Infrastructure.ObjectPooling;
 
 namespace GroupProject.Domain.Entities;
 
 /// <summary>
 /// Represents a hand of cards in a blackjack game with proper value calculation and game state checking.
+/// Optimized for performance with caching and reduced allocations.
 /// </summary>
 public class Hand
 {
     private readonly List<Card> _cards = new();
+    private int _cachedValue = -1;
+    private bool _valueCacheValid = false;
 
     /// <summary>
     /// Gets the cards in this hand as a read-only collection.
@@ -26,6 +30,7 @@ public class Hand
     public void AddCard(Card card)
     {
         _cards.Add(card);
+        InvalidateCache();
     }
 
     /// <summary>
@@ -34,15 +39,20 @@ public class Hand
     public void Clear()
     {
         _cards.Clear();
+        InvalidateCache();
     }
 
     /// <summary>
     /// Calculates the total value of this hand, handling Aces appropriately.
     /// Aces are valued at 11 unless that would cause a bust, in which case they are valued at 1.
+    /// Uses caching to avoid recalculation when hand hasn't changed.
     /// </summary>
     /// <returns>The total value of the hand.</returns>
     public int GetValue()
     {
+        if (_valueCacheValid)
+            return _cachedValue;
+
         int total = 0;
         int aceCount = 0;
 
@@ -71,6 +81,8 @@ public class Hand
             aceCount--;
         }
 
+        _cachedValue = total;
+        _valueCacheValid = true;
         return total;
     }
 
@@ -142,6 +154,32 @@ public class Hand
         if (_cards.Count == 0)
             return "Empty hand";
 
-        return string.Join(", ", _cards.Select(card => card.ToString()));
+        var sb = StringBuilderPool.Get();
+        try
+        {
+            var first = true;
+            foreach (var card in _cards)
+            {
+                if (!first)
+                    sb.Append(", ");
+                
+                sb.Append(card.ToString());
+                first = false;
+            }
+
+            return sb.ToString();
+        }
+        finally
+        {
+            StringBuilderPool.Return(sb);
+        }
+    }
+
+    /// <summary>
+    /// Invalidates the cached hand value, forcing recalculation on next access.
+    /// </summary>
+    private void InvalidateCache()
+    {
+        _valueCacheValid = false;
     }
 }

@@ -2,22 +2,50 @@ namespace GroupProject.Domain.ValueObjects;
 
 /// <summary>
 /// Extension methods and utilities for working with cards.
+/// Optimized with caching for frequently used operations.
 /// </summary>
 public static class CardExtensions
 {
+    // Cache the standard deck to avoid repeated enumeration
+    private static readonly Card[] _standardDeck = CreateInitialStandardDeck();
+
     /// <summary>
     /// Creates a standard 52-card deck.
+    /// Uses cached array for optimal performance.
     /// </summary>
     /// <returns>A collection of all 52 cards in a standard deck</returns>
     public static IEnumerable<Card> CreateStandardDeck()
     {
+        return _standardDeck;
+    }
+
+    /// <summary>
+    /// Creates a standard 52-card deck as an array for maximum performance.
+    /// </summary>
+    /// <returns>An array of all 52 cards in a standard deck</returns>
+    public static Card[] CreateStandardDeckArray()
+    {
+        return (Card[])_standardDeck.Clone();
+    }
+
+    /// <summary>
+    /// Internal method to create the initial standard deck array.
+    /// </summary>
+    /// <returns>An array of all 52 cards in a standard deck</returns>
+    private static Card[] CreateInitialStandardDeck()
+    {
+        var cards = new Card[52];
+        var index = 0;
+        
         foreach (var suit in Enum.GetValues<Suit>())
         {
             foreach (var rank in Enum.GetValues<Rank>())
             {
-                yield return new Card(suit, rank);
+                cards[index++] = new Card(suit, rank);
             }
         }
+        
+        return cards;
     }
     
     /// <summary>
@@ -33,17 +61,17 @@ public static class CardExtensions
     /// <summary>
     /// Gets the total blackjack value of a collection of cards.
     /// Properly handles Ace values (1 or 11) to get the best possible hand value.
+    /// Optimized to avoid unnecessary allocations.
     /// </summary>
     /// <param name="cards">The cards to calculate value for</param>
     /// <returns>The optimal blackjack value for the hand</returns>
     public static int GetBlackjackValue(this IEnumerable<Card> cards)
     {
-        var cardList = cards.ToList();
         int total = 0;
         int aces = 0;
         
-        // First pass: count aces and add other card values
-        foreach (var card in cardList)
+        // Single pass: count aces and add other card values
+        foreach (var card in cards)
         {
             if (card.Rank == Rank.Ace)
             {

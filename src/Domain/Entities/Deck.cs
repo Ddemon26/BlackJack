@@ -1,5 +1,6 @@
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Infrastructure.ObjectPooling;
 
 namespace GroupProject.Domain.Entities;
 
@@ -61,10 +62,18 @@ public class Deck : IDeck
 
     /// <summary>
     /// Resets the deck to its initial state with all 52 cards and shuffles it.
+    /// Optimized to reuse existing capacity when possible.
     /// </summary>
     public void Reset()
     {
         _cards.Clear();
+        
+        // Ensure capacity to avoid reallocations
+        if (_cards.Capacity < _originalCards.Count)
+        {
+            _cards.Capacity = _originalCards.Count;
+        }
+        
         _cards.AddRange(_originalCards);
         Shuffle();
     }

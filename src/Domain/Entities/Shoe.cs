@@ -1,5 +1,6 @@
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Infrastructure.ObjectPooling;
 
 namespace GroupProject.Domain.Entities;
 
@@ -74,10 +75,18 @@ public class Shoe : IShoe
 
     /// <summary>
     /// Resets the shoe to its initial state with all cards from all decks and shuffles them.
+    /// Optimized to reuse existing capacity and minimize allocations.
     /// </summary>
     public void Reset()
     {
         _cards.Clear();
+
+        // Pre-allocate capacity to avoid reallocations
+        var totalCards = _deckCount * 52;
+        if (_cards.Capacity < totalCards)
+        {
+            _cards.Capacity = totalCards;
+        }
 
         // Add all cards from each deck
         for (int i = 0; i < _deckCount; i++)

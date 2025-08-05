@@ -12,9 +12,6 @@ namespace GroupProject;
 internal static class Program 
 {
     private const string BLACKJACK = "--blackjack";
-    private const string TEST_HAND = "--testhand";
-    private const string TEST_DECK = "--testdeck";
-    private const string TEST_PLAYER = "--testplayer";
 
     /// <summary>
     /// Main application entry point with comprehensive error handling and dependency injection setup.
@@ -32,21 +29,6 @@ internal static class Program
                 case > 0 when processedArgs[0].Equals(BLACKJACK):
                 {
                     await RunWithGlobalErrorHandling(() => RunBlackjackGameAsync());
-                    break;
-                }
-                case > 0 when processedArgs[0].Equals(TEST_HAND):
-                {
-                    await RunWithGlobalErrorHandling(() => Task.Run(RunHandTests));
-                    break;
-                }
-                case > 0 when processedArgs[0].Equals(TEST_DECK):
-                {
-                    await RunWithGlobalErrorHandling(() => Task.Run(RunDeckTests));
-                    break;
-                }
-                case > 0 when processedArgs[0].Equals(TEST_PLAYER):
-                {
-                    await RunWithGlobalErrorHandling(() => Task.Run(RunPlayerTests));
                     break;
                 }
                 default:
@@ -112,13 +94,12 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("Available commands:");
         Console.WriteLine("  --blackjack   : Start blackjack game");
-        Console.WriteLine("  --testhand    : Run Hand class tests");
-        Console.WriteLine("  --testdeck    : Run Deck and Shoe class tests");
-        Console.WriteLine("  --testplayer  : Run Player class tests");
         Console.WriteLine();
         Console.WriteLine("Example usage:");
-        Console.WriteLine("  dotnet run --blackjack");
-        Console.WriteLine("  dotnet run --testhand");
+        Console.WriteLine("  dotnet run -- --blackjack");
+        Console.WriteLine();
+        Console.WriteLine("For running tests, use:");
+        Console.WriteLine("  dotnet test");
     }
 
     /// <summary>
@@ -161,59 +142,7 @@ internal static class Program
             .Build();
     }
     
-    /// <summary>
-    /// Runs comprehensive tests for the Hand class implementation.
-    /// </summary>
-    private static void RunHandTests()
-    {
-        try
-        {
-            Console.WriteLine("Running Hand class tests...");
-            GroupProject.Domain.Entities.HandTestRunner.RunTests();
-            Console.WriteLine("\n🎉 All tests passed! Hand implementation is working correctly.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"\n❌ Test failed: {ex.Message}");
-            throw; // Re-throw to be handled by global error handler
-        }
-    }
-    
-    /// <summary>
-    /// Runs comprehensive tests for the Deck and Shoe class implementations.
-    /// </summary>
-    private static void RunDeckTests()
-    {
-        try
-        {
-            Console.WriteLine("Running Deck and Shoe class tests...");
-            GroupProject.Domain.Entities.DeckAndShoeTestRunner.RunTests();
-            Console.WriteLine("\n🎉 All tests passed! Deck and Shoe implementations are working correctly.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"\n❌ Test failed: {ex.Message}");
-            throw; // Re-throw to be handled by global error handler
-        }
-    }
-    
-    /// <summary>
-    /// Runs comprehensive tests for the Player class implementation.
-    /// </summary>
-    private static void RunPlayerTests()
-    {
-        try
-        {
-            Console.WriteLine("Running Player class tests...");
-            GroupProject.Domain.Entities.PlayerTestRunner.RunTests();
-            Console.WriteLine("\n🎉 All tests passed! Player implementation is working correctly.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"\n❌ Test failed: {ex.Message}");
-            throw; // Re-throw to be handled by global error handler
-        }
-    }
+
     
     /// <summary>
     /// Processes command-line arguments by converting them to lowercase for case-insensitive comparison.

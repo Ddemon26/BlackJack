@@ -3,6 +3,7 @@ using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Infrastructure.ObjectPooling;
 
 namespace GroupProject.Application.Services;
 
@@ -44,38 +45,56 @@ public class GameService : IGameService
             throw new InvalidOperationException("A game is already in progress. Complete the current game before starting a new one.");
         }
 
-        var names = playerNames?.ToList() ?? throw new ArgumentNullException(nameof(playerNames));
-        
-        if (!names.Any())
+        // Use pooled list for better performance
+        var names = ListPool<string>.Get();
+        try
         {
-            throw new ArgumentException("At least one player name must be provided.", nameof(playerNames));
+            names.AddRange(playerNames ?? throw new ArgumentNullException(nameof(playerNames)));
+            
+            if (!names.Any())
+            {
+                throw new ArgumentException("At least one player name must be provided.", nameof(playerNames));
+            }
+
+            if (names.Any(string.IsNullOrWhiteSpace))
+            {
+                throw new ArgumentException("Player names cannot be null or whitespace.", nameof(playerNames));
+            }
+
+            // Check for duplicate names (case-insensitive) using pooled collections
+            var seenNames = ListPool<string>.Get();
+            try
+            {
+                foreach (var name in names)
+                {
+                    var normalizedName = name.Trim().ToLowerInvariant();
+                    if (seenNames.Contains(normalizedName))
+                    {
+                        throw new ArgumentException($"Duplicate player names are not allowed: {name}", nameof(playerNames));
+                    }
+                    seenNames.Add(normalizedName);
+                }
+            }
+            finally
+            {
+                ListPool<string>.Return(seenNames);
+            }
+
+            // Clear previous game state
+            _players.Clear();
+            _dealer = null;
+            _currentPlayerIndex = 0;
+            _gameStartTime = DateTime.UtcNow;
+
+            // Create players
+            foreach (var name in names)
+            {
+                _players.Add(new Player(name.Trim(), PlayerType.Human));
+            }
         }
-
-        if (names.Any(string.IsNullOrWhiteSpace))
+        finally
         {
-            throw new ArgumentException("Player names cannot be null or whitespace.", nameof(playerNames));
-        }
-
-        // Check for duplicate names (case-insensitive)
-        var duplicates = names.GroupBy(n => n.Trim().ToLowerInvariant())
-                              .Where(g => g.Count() > 1)
-                              .Select(g => g.Key);
-        
-        if (duplicates.Any())
-        {
-            throw new ArgumentException($"Duplicate player names are not allowed: {string.Join(", ", duplicates)}", nameof(playerNames));
-        }
-
-        // Clear previous game state
-        _players.Clear();
-        _dealer = null;
-        _currentPlayerIndex = 0;
-        _gameStartTime = DateTime.UtcNow;
-
-        // Create players
-        foreach (var name in names)
-        {
-            _players.Add(new Player(name.Trim(), PlayerType.Human));
+            ListPool<string>.Return(names);
         }
 
         // Create dealer

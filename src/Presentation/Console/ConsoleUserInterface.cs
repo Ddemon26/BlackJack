@@ -8,6 +8,8 @@ using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
 using GroupProject.Infrastructure.Validation;
+using GroupProject.Infrastructure.Formatting;
+using GroupProject.Infrastructure.ObjectPooling;
 
 namespace GroupProject.Presentation.Console;
 
@@ -117,22 +119,21 @@ public class ConsoleUserInterface : IUserInterface
             return;
         }
 
-        // Display cards
+        // Display cards using optimized formatting
         await _outputProvider.WriteAsync("  Cards: ");
         
-        for (int i = 0; i < cards.Count; i++)
+        if (hideFirstCard && cards.Count > 0)
         {
-            if (i > 0)
+            await _outputProvider.WriteAsync("[Hidden Card]");
+            if (cards.Count > 1)
+            {
                 await _outputProvider.WriteAsync(", ");
-                
-            if (hideFirstCard && i == 0)
-            {
-                await _outputProvider.WriteAsync("[Hidden Card]");
+                await _outputProvider.WriteAsync(CardFormatter.FormatCardsSymbols(cards.Skip(1)));
             }
-            else
-            {
-                await _outputProvider.WriteAsync(FormatCard(cards[i]));
-            }
+        }
+        else
+        {
+            await _outputProvider.WriteAsync(CardFormatter.FormatCardsSymbols(cards));
         }
         
         await _outputProvider.WriteLineAsync();
@@ -156,7 +157,7 @@ public class ConsoleUserInterface : IUserInterface
         }
         else
         {
-            await _outputProvider.WriteLineAsync("  Value: ? + " + (cards.Count > 1 ? FormatCard(cards[1]) : "?"));
+            await _outputProvider.WriteLineAsync("  Value: ? + " + (cards.Count > 1 ? CardFormatter.FormatCardSymbol(cards[1]) : "?"));
         }
     }
 
@@ -177,9 +178,9 @@ public class ConsoleUserInterface : IUserInterface
         await _outputProvider.WriteLineAsync("╚══════════════════════════════════════════════════════════════╝");
         await _outputProvider.WriteLineAsync();
 
-        // Show dealer's final hand
+        // Show dealer's final hand using optimized formatting
         await _outputProvider.WriteLineAsync("DEALER FINAL HAND:");
-        await _outputProvider.WriteLineAsync($"  Cards: {string.Join(", ", results.DealerHand.Cards.Select(FormatCard))}");
+        await _outputProvider.WriteLineAsync($"  Cards: {CardFormatter.FormatCardsSymbols(results.DealerHand.Cards)}");
         await _outputProvider.WriteLineAsync($"  Value: {results.DealerHand.GetValue()}");
         
         if (results.DealerHand.IsBusted())
@@ -367,31 +368,5 @@ public class ConsoleUserInterface : IUserInterface
         await _outputProvider.ClearAsync();
     }
 
-    /// <summary>
-    /// Formats a card for consistent display throughout the interface.
-    /// </summary>
-    /// <param name="card">The card to format.</param>
-    /// <returns>A formatted string representation of the card.</returns>
-    private static string FormatCard(Card card)
-    {
-        var rank = card.Rank switch
-        {
-            Rank.Ace => "A",
-            Rank.Jack => "J",
-            Rank.Queen => "Q", 
-            Rank.King => "K",
-            _ => ((int)card.Rank).ToString()
-        };
 
-        var suit = card.Suit switch
-        {
-            Suit.Spades => "♠",
-            Suit.Hearts => "♥",
-            Suit.Diamonds => "♦",
-            Suit.Clubs => "♣",
-            _ => card.Suit.ToString()[0].ToString()
-        };
-
-        return $"{rank}{suit}";
-    }
 }

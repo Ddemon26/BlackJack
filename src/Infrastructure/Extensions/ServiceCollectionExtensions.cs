@@ -7,6 +7,7 @@ using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Infrastructure.Providers;
 using GroupProject.Presentation.Console;
+using GroupProject.Infrastructure.ObjectPooling;
 
 namespace GroupProject.Infrastructure.Extensions;
 
@@ -46,6 +47,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRandomProvider, SystemRandomProvider>();
         services.AddSingleton<IInputProvider, ConsoleInputProvider>();
         services.AddSingleton<IOutputProvider, ConsoleOutputProvider>();
+        
+        // Register object pools for performance optimization
+        services.AddSingleton(typeof(IObjectPool<>), typeof(DefaultObjectPool<>));
         
         // Register domain entities with proper lifetimes
         services.AddTransient<IDeck>(provider => 
