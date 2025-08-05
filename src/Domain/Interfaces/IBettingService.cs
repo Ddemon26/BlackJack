@@ -83,4 +83,19 @@ public interface IBettingService
     /// <param name="playerResults">A dictionary mapping player names to their game results.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the payout summary.</returns>
     Task<PayoutSummary> ProcessPayoutsAsync(IDictionary<string, GameResult> playerResults);
+
+    /// <summary>
+    /// Gets the minimum bet amount.
+    /// </summary>
+    Money MinimumBet { get; }
+
+    /// <summary>
+    /// Gets the maximum bet amount.
+    /// </summary>
+    Money MaximumBet { get; }
+
+    /// <summary>
+    /// Gets the blackjack multiplier for payout calculations.
+    /// </summary>
+    decimal BlackjackMultiplier { get; }
 }

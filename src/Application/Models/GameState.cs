@@ -58,6 +58,11 @@ public enum GamePhase
     Setup,
 
     /// <summary>
+    /// Players are placing their bets
+    /// </summary>
+    Betting,
+
+    /// <summary>
     /// Initial cards are being dealt
     /// </summary>
     InitialDeal,

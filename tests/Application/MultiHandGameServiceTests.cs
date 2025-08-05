@@ -15,6 +15,7 @@ public class MultiHandGameServiceTests
 {
     private readonly Mock<IShoe> _mockShoe;
     private readonly Mock<IGameRules> _mockGameRules;
+    private readonly Mock<IBettingService> _mockBettingService;
     private readonly SplitHandManager _splitHandManager;
     private readonly GameService _gameService;
 
@@ -22,8 +23,15 @@ public class MultiHandGameServiceTests
     {
         _mockShoe = new Mock<IShoe>();
         _mockGameRules = new Mock<IGameRules>();
+        _mockBettingService = new Mock<IBettingService>();
         _splitHandManager = new SplitHandManager();
-        _gameService = new GameService(_mockShoe.Object, _mockGameRules.Object, _splitHandManager);
+        
+        // Setup default betting service behavior
+        _mockBettingService.Setup(bs => bs.MinimumBet).Returns(Money.FromUsd(5.00m));
+        _mockBettingService.Setup(bs => bs.MaximumBet).Returns(Money.FromUsd(500.00m));
+        _mockBettingService.Setup(bs => bs.BlackjackMultiplier).Returns(1.5m);
+        
+        _gameService = new GameService(_mockShoe.Object, _mockGameRules.Object, _mockBettingService.Object, _splitHandManager);
     }
 
     [Fact]

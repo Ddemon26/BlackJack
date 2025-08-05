@@ -126,4 +126,32 @@ public interface IGameService
     /// <param name="playerName">The name of the player.</param>
     /// <returns>A read-only list of all hands belonging to the player.</returns>
     IReadOnlyList<Hand> GetPlayerHands(string playerName);
+
+    /// <summary>
+    /// Processes the betting round by collecting and validating bets from all players.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the betting result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no game is in progress or betting phase is not active.</exception>
+    Task<BettingResult> ProcessBettingRoundAsync();
+
+    /// <summary>
+    /// Places a bet for a specific player during the betting round.
+    /// </summary>
+    /// <param name="playerName">The name of the player placing the bet.</param>
+    /// <param name="amount">The amount to bet.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the betting result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when betting is not allowed.</exception>
+    Task<BettingResult> PlacePlayerBetAsync(string playerName, Money amount);
+
+    /// <summary>
+    /// Gets the current betting state.
+    /// </summary>
+    /// <returns>The current betting state, or null if no betting round is active.</returns>
+    BettingState? GetCurrentBettingState();
+
+    /// <summary>
+    /// Determines if all players have placed their bets.
+    /// </summary>
+    /// <returns>True if all players have placed bets, false otherwise.</returns>
+    bool AllPlayersHaveBets();
 }

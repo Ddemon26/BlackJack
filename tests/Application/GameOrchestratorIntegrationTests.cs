@@ -29,7 +29,14 @@ public class GameOrchestratorIntegrationTests
         _randomProvider = new TestRandomProvider();
         var shoe = new Shoe(1, _randomProvider);
         var gameRules = new GameRules();
-        _gameService = new GameService(shoe, gameRules);
+        var mockBettingService = new Mock<IBettingService>();
+        
+        // Setup default betting service behavior
+        mockBettingService.Setup(bs => bs.MinimumBet).Returns(Money.FromUsd(5.00m));
+        mockBettingService.Setup(bs => bs.MaximumBet).Returns(Money.FromUsd(500.00m));
+        mockBettingService.Setup(bs => bs.BlackjackMultiplier).Returns(1.5m);
+        
+        _gameService = new GameService(shoe, gameRules, mockBettingService.Object);
         
         _gameOrchestrator = new GameOrchestrator(_gameService, _mockUserInterface.Object, _mockErrorHandler.Object);
     }

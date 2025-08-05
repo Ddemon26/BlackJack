@@ -16,6 +16,7 @@ public class GameService : IGameService
     private readonly IShoe _shoe;
     private readonly IGameRules _gameRules;
     private readonly SplitHandManager _splitHandManager;
+    private readonly IBettingService _bettingService;
     private readonly List<Player> _players = new();
     private readonly Dictionary<string, List<PlayerHand>> _playerHands = new();
     private readonly Dictionary<string, int> _currentHandIndex = new();
@@ -23,17 +24,20 @@ public class GameService : IGameService
     private GamePhase _currentPhase = GamePhase.Setup;
     private int _currentPlayerIndex = 0;
     private DateTime _gameStartTime;
+    private BettingState? _currentBettingState;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GameService"/> class.
     /// </summary>
     /// <param name="shoe">The shoe containing cards for the game.</param>
     /// <param name="gameRules">The game rules implementation.</param>
+    /// <param name="bettingService">The betting service for handling bets and bankrolls.</param>
     /// <param name="splitHandManager">The split hand manager for handling split operations.</param>
-    public GameService(IShoe shoe, IGameRules gameRules, SplitHandManager? splitHandManager = null)
+    public GameService(IShoe shoe, IGameRules gameRules, IBettingService bettingService, SplitHandManager? splitHandManager = null)
     {
         _shoe = shoe ?? throw new ArgumentNullException(nameof(shoe));
         _gameRules = gameRules ?? throw new ArgumentNullException(nameof(gameRules));
+        _bettingService = bettingService ?? throw new ArgumentNullException(nameof(bettingService));
         _splitHandManager = splitHandManager ?? new SplitHandManager();
     }
 
@@ -110,7 +114,191 @@ public class GameService : IGameService
         // Shuffle the shoe
         _shoe.Shuffle();
 
-        _currentPhase = GamePhase.InitialDeal;
+        _currentPhase = GamePhase.Betting;
+        
+        // Initialize betting state with zero bankrolls - will be updated with actual bankrolls when needed
+        var playerBankrolls = new Dictionary<string, Money>();
+        foreach (var player in _players)
+        {
+            playerBankrolls[player.Name] = Money.Zero;
+        }
+        _currentBettingState = new BettingState(_players.Select(p => p.Name), playerBankrolls);
+    }
+
+    /// <summary>
+    /// Processes the betting round by collecting bets from all players.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the betting result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no game is in progress or betting phase is not active.</exception>
+    public async Task<BettingResult> ProcessBettingRoundAsync()
+    {
+        if (_currentPhase != GamePhase.Betting)
+        {
+            return BettingResult.Failure("Cannot process betting round. Game must be in Betting phase.");
+        }
+
+        if (_players.Count == 0)
+        {
+            return BettingResult.Failure("No players in the current game.");
+        }
+
+        try
+        {
+            // Initialize betting state with current bankrolls if not already done
+            if (_currentBettingState == null)
+            {
+                var playerBankrolls = new Dictionary<string, Money>();
+                foreach (var player in _players)
+                {
+                    var bankroll = await _bettingService.GetPlayerBankrollAsync(player.Name);
+                    playerBankrolls[player.Name] = bankroll;
+                }
+                _currentBettingState = new BettingState(_players.Select(p => p.Name), playerBankrolls);
+            }
+
+            // Validate that all players have sufficient funds for minimum bet
+            var minimumBet = _bettingService.MinimumBet;
+            var playersWithInsufficientFunds = new List<string>();
+
+            foreach (var player in _players)
+            {
+                var bankroll = await _bettingService.GetPlayerBankrollAsync(player.Name);
+                if (bankroll < minimumBet)
+                {
+                    playersWithInsufficientFunds.Add(player.Name);
+                }
+            }
+
+            if (playersWithInsufficientFunds.Any())
+            {
+                var playerList = string.Join(", ", playersWithInsufficientFunds);
+                return BettingResult.Failure($"Players with insufficient funds: {playerList}. Minimum bet: {minimumBet}");
+            }
+
+            // All players have sufficient funds, advance to InitialDeal phase
+            _currentPhase = GamePhase.InitialDeal;
+
+            return BettingResult.Success("Betting round validation completed successfully. Ready to deal cards.");
+        }
+        catch (Exception ex)
+        {
+            return BettingResult.Failure($"Error processing betting round: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Places a bet for a specific player during the betting round.
+    /// </summary>
+    /// <param name="playerName">The name of the player placing the bet.</param>
+    /// <param name="amount">The amount to bet.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the betting result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when betting is not allowed.</exception>
+    public async Task<BettingResult> PlacePlayerBetAsync(string playerName, Money amount)
+    {
+        if (_currentPhase != GamePhase.Betting)
+        {
+            return BettingResult.Failure("Cannot place bet. Game must be in Betting phase.");
+        }
+
+        if (_currentBettingState?.CurrentPhase != BettingPhase.WaitingForBets)
+        {
+            return BettingResult.Failure("Betting round is not accepting bets.");
+        }
+
+        var player = GetPlayer(playerName);
+        if (player == null)
+        {
+            return BettingResult.Failure($"Player '{playerName}' not found in the current game.");
+        }
+
+        // Check if player already has a bet
+        if (_currentBettingState?.HasPlayerBet(playerName) == true)
+        {
+            return BettingResult.Failure($"Player {playerName} has already placed a bet this round.");
+        }
+
+        try
+        {
+            // Initialize betting state with actual bankrolls if needed (check if all players have zero bankrolls)
+            if (_currentBettingState != null && _players.All(p => _currentBettingState.GetPlayerBankroll(p.Name) == Money.Zero))
+            {
+                var playerBankrolls = new Dictionary<string, Money>();
+                foreach (var p in _players)
+                {
+                    var bankroll = await _bettingService.GetPlayerBankrollAsync(p.Name);
+                    playerBankrolls[p.Name] = bankroll;
+                }
+                _currentBettingState = new BettingState(_players.Select(p => p.Name), playerBankrolls);
+            }
+
+            // Validate bet through betting service first
+            var validationResult = await _bettingService.ValidateBetAsync(playerName, amount);
+            if (validationResult.IsFailure)
+            {
+                return validationResult;
+            }
+
+            // Update betting state first (before calling betting service)
+            bool success;
+            try
+            {
+                success = _currentBettingState?.PlaceBet(playerName, amount, BetType.Standard) ?? false;
+            }
+            catch (Exception ex)
+            {
+                return BettingResult.Failure($"Failed to update betting state for {playerName}: {ex.Message}");
+            }
+            
+            if (!success)
+            {
+                return BettingResult.Failure($"Failed to update betting state for {playerName}.");
+            }
+
+            // Place the bet through the betting service
+            var bettingResult = await _bettingService.PlaceBetAsync(playerName, amount);
+            
+            if (bettingResult.IsFailure)
+            {
+                // If betting service fails, we need to revert the betting state
+                // For now, we'll just return the failure - in a real implementation we'd need proper rollback
+                return bettingResult;
+            }
+
+            // Update the player's bet in the domain entity
+            if (bettingResult.Bet != null)
+            {
+                player.PlaceBet(amount, BetType.Standard);
+            }
+
+            return bettingResult;
+        }
+        catch (Exception ex)
+        {
+            return BettingResult.Failure($"Error placing bet for {playerName}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Gets the current betting state.
+    /// </summary>
+    /// <returns>The current betting state, or null if no betting round is active.</returns>
+    public BettingState? GetCurrentBettingState()
+    {
+        return _currentBettingState;
+    }
+
+    /// <summary>
+    /// Determines if all players have placed their bets.
+    /// </summary>
+    /// <returns>True if all players have placed bets, false otherwise.</returns>
+    public bool AllPlayersHaveBets()
+    {
+        if (_currentBettingState == null || _players.Count == 0)
+        {
+            return false;
+        }
+
+        return _players.All(player => _currentBettingState.HasPlayerBet(player.Name));
     }
 
     /// <inheritdoc />

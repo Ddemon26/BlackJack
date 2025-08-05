@@ -4,6 +4,7 @@ using GroupProject.Domain.Entities;
 using GroupProject.Domain.ValueObjects;
 using GroupProject.Infrastructure.Providers;
 using GroupProject.Domain.Interfaces;
+using Moq;
 using Xunit;
 
 namespace GroupProject.Tests.Application;
@@ -16,6 +17,7 @@ public class GameServiceIntegrationTests
     private readonly GameService _gameService;
     private readonly Shoe _shoe;
     private readonly GameRules _gameRules;
+    private readonly Mock<IBettingService> _mockBettingService;
     private readonly TestRandomProvider _randomProvider;
 
     public GameServiceIntegrationTests()
@@ -23,7 +25,13 @@ public class GameServiceIntegrationTests
         _randomProvider = new TestRandomProvider();
         _shoe = new Shoe(1, _randomProvider); // Single deck for predictable testing
         _gameRules = new GameRules();
-        _gameService = new GameService(_shoe, _gameRules);
+        _mockBettingService = new Mock<IBettingService>();
+        
+        // Setup default betting service behavior
+        _mockBettingService.Setup(bs => bs.MinimumBet).Returns(Money.FromUsd(5.00m));
+        _mockBettingService.Setup(bs => bs.MaximumBet).Returns(Money.FromUsd(500.00m));
+        _mockBettingService.Setup(bs => bs.BlackjackMultiplier).Returns(1.5m);
+        _gameService = new GameService(_shoe, _gameRules, _mockBettingService.Object);
     }
 
     [Fact]
@@ -368,7 +376,7 @@ public class GameServiceIntegrationTests
     {
         // Arrange - Create a shoe with very few cards
         var smallShoe = new Shoe(1, _randomProvider);
-        var gameService = new GameService(smallShoe, _gameRules);
+        var gameService = new GameService(smallShoe, _gameRules, _mockBettingService.Object);
 
         // Draw most cards from the shoe
         while (smallShoe.RemainingCards > 3)

@@ -12,27 +12,42 @@ public class GameServiceTests
 {
     private readonly Mock<IShoe> _mockShoe;
     private readonly Mock<IGameRules> _mockGameRules;
+    private readonly Mock<IBettingService> _mockBettingService;
     private readonly GameService _gameService;
 
     public GameServiceTests()
     {
         _mockShoe = new Mock<IShoe>();
         _mockGameRules = new Mock<IGameRules>();
-        _gameService = new GameService(_mockShoe.Object, _mockGameRules.Object);
+        _mockBettingService = new Mock<IBettingService>();
+        
+        // Setup default betting service behavior
+        _mockBettingService.Setup(bs => bs.MinimumBet).Returns(Money.FromUsd(5.00m));
+        _mockBettingService.Setup(bs => bs.MaximumBet).Returns(Money.FromUsd(500.00m));
+        _mockBettingService.Setup(bs => bs.BlackjackMultiplier).Returns(1.5m);
+        
+        _gameService = new GameService(_mockShoe.Object, _mockGameRules.Object, _mockBettingService.Object);
     }
 
     [Fact]
     public void Constructor_WithNullShoe_ThrowsArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new GameService(null!, _mockGameRules.Object));
+        Assert.Throws<ArgumentNullException>(() => new GameService(null!, _mockGameRules.Object, _mockBettingService.Object));
     }
 
     [Fact]
     public void Constructor_WithNullGameRules_ThrowsArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new GameService(_mockShoe.Object, null!));
+        Assert.Throws<ArgumentNullException>(() => new GameService(_mockShoe.Object, null!, _mockBettingService.Object));
+    }
+
+    [Fact]
+    public void Constructor_WithNullBettingService_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => new GameService(_mockShoe.Object, _mockGameRules.Object, null!));
     }
 
     [Fact]
