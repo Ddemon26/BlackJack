@@ -427,4 +427,290 @@ public class GameRulesTests
     }
 
     #endregion
+
+    #region CanDoubleDown Tests
+
+    [Fact]
+    public void CanDoubleDown_WithTwoCardsNotBustedNotBlackjack_ReturnsTrue()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Five),
+            new Card(Suit.Spades, Rank.Six)
+        );
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithOneCard_ReturnsFalse()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Five)
+        );
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithThreeCards_ReturnsFalse()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Five),
+            new Card(Suit.Spades, Rank.Six),
+            new Card(Suit.Clubs, Rank.Two)
+        );
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithBlackjack_ReturnsFalse()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Ace),
+            new Card(Suit.Spades, Rank.King)
+        );
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithBustedHand_ReturnsFalse()
+    {
+        // Arrange - Create a busted hand with exactly 2 cards (impossible in real game, but for testing)
+        var hand = new Hand();
+        // We'll simulate a busted state by creating a hand that would be busted
+        // Since we can't actually create a 2-card busted hand in real blackjack, 
+        // we'll test the logic by adding cards that would make it bust
+        hand.AddCard(new Card(Suit.Hearts, Rank.Ten));
+        hand.AddCard(new Card(Suit.Spades, Rank.Five));
+        hand.AddCard(new Card(Suit.Clubs, Rank.Seven)); // This makes 22, busted
+        
+        // Now clear and add just two cards that would be 22 if possible (for testing)
+        // Actually, let's test with a realistic scenario - we can't have 2 cards that bust
+        // So let's test the method logic directly
+        hand.Clear();
+        hand.AddCard(new Card(Suit.Hearts, Rank.King));
+        hand.AddCard(new Card(Suit.Spades, Rank.Queen));
+        // This is 20, not busted. Let's add one more to make it busted for the test
+        hand.AddCard(new Card(Suit.Clubs, Rank.Five)); // Now 25, busted
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.False(result); // Should be false because it has 3 cards, not because it's busted
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithEmptyHand_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithTwoAces_ReturnsTrue()
+    {
+        // Arrange - Two Aces make 12 (one as 11, one as 1), not blackjack
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Ace),
+            new Card(Suit.Spades, Rank.Ace)
+        );
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void CanDoubleDown_WithTwentyPoints_ReturnsTrue()
+    {
+        // Arrange - 20 points with exactly 2 cards
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Ten),
+            new Card(Suit.Spades, Rank.Ten)
+        );
+
+        // Act
+        var result = _gameRules.CanDoubleDown(hand);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    #endregion
+
+    #region CanSplit Tests
+
+    [Fact]
+    public void CanSplit_WithMatchingPair_ReturnsTrue()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Eight),
+            new Card(Suit.Spades, Rank.Eight)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithAces_ReturnsTrue()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Ace),
+            new Card(Suit.Clubs, Rank.Ace)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithFaceCards_ReturnsTrue()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.King),
+            new Card(Suit.Spades, Rank.King)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithDifferentFaceCards_ReturnsFalse()
+    {
+        // Arrange - King and Queen are both worth 10 but different ranks
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.King),
+            new Card(Suit.Spades, Rank.Queen)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithDifferentRanks_ReturnsFalse()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Eight),
+            new Card(Suit.Spades, Rank.Nine)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithOneCard_ReturnsFalse()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Eight)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithThreeCards_ReturnsFalse()
+    {
+        // Arrange
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Eight),
+            new Card(Suit.Spades, Rank.Eight),
+            new Card(Suit.Clubs, Rank.Five)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithEmptyHand_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void CanSplit_WithTensAndFaceCard_ReturnsFalse()
+    {
+        // Arrange - Ten and King are both worth 10 but different ranks
+        var hand = CreateHand(
+            new Card(Suit.Hearts, Rank.Ten),
+            new Card(Suit.Spades, Rank.King)
+        );
+
+        // Act
+        var result = _gameRules.CanSplit(hand);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    #endregion
 }

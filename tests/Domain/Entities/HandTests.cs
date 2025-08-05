@@ -346,4 +346,179 @@ public class HandTests
         Assert.Equal(30, value);
         Assert.True(hand.IsBusted());
     }
+
+    #region Split Hand Tests
+
+    [Fact]
+    public void IsSplitHand_InitialState_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+
+        // Act & Assert
+        Assert.False(hand.IsSplitHand);
+    }
+
+    [Fact]
+    public void MarkAsSplitHand_SetsIsSplitHandToTrue()
+    {
+        // Arrange
+        var hand = new Hand();
+
+        // Act
+        hand.MarkAsSplitHand();
+
+        // Assert
+        Assert.True(hand.IsSplitHand);
+    }
+
+    [Fact]
+    public void Clear_ResetsSplitHandState()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.MarkAsSplitHand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Ace));
+
+        // Act
+        hand.Clear();
+
+        // Assert
+        Assert.False(hand.IsSplitHand);
+        Assert.False(hand.IsComplete);
+        Assert.Empty(hand.Cards);
+    }
+
+    [Fact]
+    public void IsComplete_InitialState_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+
+        // Act & Assert
+        Assert.False(hand.IsComplete);
+    }
+
+    [Fact]
+    public void MarkAsComplete_SetsIsCompleteToTrue()
+    {
+        // Arrange
+        var hand = new Hand();
+
+        // Act
+        hand.MarkAsComplete();
+
+        // Assert
+        Assert.True(hand.IsComplete);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithNormalHand_ReturnsTrue()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Five));
+        hand.AddCard(new Card(Suit.Spades, Rank.Six));
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.True(canReceive);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithCompleteHand_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Five));
+        hand.MarkAsComplete();
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.False(canReceive);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithBustedHand_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Ten));
+        hand.AddCard(new Card(Suit.Spades, Rank.Ten));
+        hand.AddCard(new Card(Suit.Clubs, Rank.Five)); // 25, busted
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.False(canReceive);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithBlackjack_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Ace));
+        hand.AddCard(new Card(Suit.Spades, Rank.King));
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.False(canReceive);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithSplitAcesAfterSecondCard_ReturnsFalse()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Ace));
+        hand.MarkAsSplitHand();
+        hand.AddCard(new Card(Suit.Spades, Rank.Five)); // Second card for split Ace
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.False(canReceive);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithSplitAcesOneCard_ReturnsTrue()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Ace));
+        hand.MarkAsSplitHand();
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.True(canReceive);
+    }
+
+    [Fact]
+    public void CanReceiveMoreCards_WithSplitNonAces_ReturnsTrue()
+    {
+        // Arrange
+        var hand = new Hand();
+        hand.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        hand.MarkAsSplitHand();
+        hand.AddCard(new Card(Suit.Spades, Rank.Five));
+
+        // Act
+        var canReceive = hand.CanReceiveMoreCards();
+
+        // Assert
+        Assert.True(canReceive);
+    }
+
+    #endregion
 }

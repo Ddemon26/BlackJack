@@ -52,4 +52,18 @@ public interface IGameRules
     /// <param name="hand">The hand to check.</param>
     /// <returns>True if the hand value exceeds 21, false otherwise.</returns>
     bool IsBusted(Hand hand);
+
+    /// <summary>
+    /// Determines if a hand qualifies for double down.
+    /// </summary>
+    /// <param name="hand">The hand to check.</param>
+    /// <returns>True if the hand can be doubled down (exactly 2 cards, not busted, not blackjack), false otherwise.</returns>
+    bool CanDoubleDown(Hand hand);
+
+    /// <summary>
+    /// Determines if a hand can be split.
+    /// </summary>
+    /// <param name="hand">The hand to check.</param>
+    /// <returns>True if the hand can be split (exactly 2 cards of the same rank), false otherwise.</returns>
+    bool CanSplit(Hand hand);
 }

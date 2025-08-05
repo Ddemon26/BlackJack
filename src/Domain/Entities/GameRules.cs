@@ -136,11 +136,33 @@ public class GameRules : IGameRules
     }
 
     /// <summary>
+    /// Determines if a hand qualifies for double down.
+    /// </summary>
+    /// <param name="hand">The hand to check.</param>
+    /// <returns>True if the hand can be doubled down, false otherwise.</returns>
+    public bool CanDoubleDown(Hand hand)
+    {
+        // Must have exactly 2 cards
+        if (hand.CardCount != 2)
+        {
+            return false;
+        }
+
+        // Must not be busted or have blackjack
+        if (hand.IsBusted() || hand.IsBlackjack())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Determines if a hand can be split (has exactly 2 cards of the same rank).
     /// </summary>
     /// <param name="hand">The hand to check.</param>
     /// <returns>True if the hand can be split, false otherwise.</returns>
-    private bool CanSplit(Hand hand)
+    public bool CanSplit(Hand hand)
     {
         if (hand.CardCount != 2)
         {

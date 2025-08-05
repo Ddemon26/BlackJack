@@ -2,6 +2,7 @@ using GroupProject.Application.Interfaces;
 using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
+using GroupProject.Domain.Services;
 using GroupProject.Domain.ValueObjects;
 using GroupProject.Infrastructure.ObjectPooling;
 
@@ -14,7 +15,10 @@ public class GameService : IGameService
 {
     private readonly IShoe _shoe;
     private readonly IGameRules _gameRules;
+    private readonly SplitHandManager _splitHandManager;
     private readonly List<Player> _players = new();
+    private readonly Dictionary<string, List<PlayerHand>> _playerHands = new();
+    private readonly Dictionary<string, int> _currentHandIndex = new();
     private Player? _dealer;
     private GamePhase _currentPhase = GamePhase.Setup;
     private int _currentPlayerIndex = 0;
@@ -25,10 +29,12 @@ public class GameService : IGameService
     /// </summary>
     /// <param name="shoe">The shoe containing cards for the game.</param>
     /// <param name="gameRules">The game rules implementation.</param>
-    public GameService(IShoe shoe, IGameRules gameRules)
+    /// <param name="splitHandManager">The split hand manager for handling split operations.</param>
+    public GameService(IShoe shoe, IGameRules gameRules, SplitHandManager? splitHandManager = null)
     {
         _shoe = shoe ?? throw new ArgumentNullException(nameof(shoe));
         _gameRules = gameRules ?? throw new ArgumentNullException(nameof(gameRules));
+        _splitHandManager = splitHandManager ?? new SplitHandManager();
     }
 
     /// <inheritdoc />
@@ -85,6 +91,7 @@ public class GameService : IGameService
             _dealer = null;
             _currentPlayerIndex = 0;
             _gameStartTime = DateTime.UtcNow;
+            ClearAllPlayerHands();
 
             // Create players
             foreach (var name in names)
@@ -140,6 +147,12 @@ public class GameService : IGameService
         }
         _dealer.AddCard(_shoe.Draw());
 
+        // Initialize player hands tracking
+        foreach (var player in _players)
+        {
+            InitializePlayerHands(player.Name);
+        }
+
         // Move to player turns phase and find first active player
         _currentPlayerIndex = -1; // Start before first player
         _currentPhase = GamePhase.PlayerTurns;
@@ -192,10 +205,10 @@ public class GameService : IGameService
                 return ProcessStandAction(player);
             
             case PlayerAction.DoubleDown:
-                return PlayerActionResult.Failure("Double down is not yet implemented.");
+                return ProcessDoubleDownAction(player);
             
             case PlayerAction.Split:
-                return PlayerActionResult.Failure("Split is not yet implemented.");
+                return ProcessSplitAction(player);
             
             default:
                 return PlayerActionResult.Failure($"Unknown action: {action}");
@@ -337,19 +350,396 @@ public class GameService : IGameService
         return PlayerActionResult.SuccessEndTurn(player.Hand);
     }
 
+    private PlayerActionResult ProcessDoubleDownAction(Player player)
+    {
+        // Validate that player can double down
+        if (!CanPlayerDoubleDown(player))
+        {
+            return PlayerActionResult.Failure("Cannot double down. Player must have exactly 2 cards and sufficient funds.");
+        }
+
+        if (_shoe.IsEmpty)
+        {
+            return PlayerActionResult.Failure("No more cards available in the shoe.");
+        }
+
+        // Double the bet
+        if (!player.HasActiveBet || player.CurrentBet == null)
+        {
+            return PlayerActionResult.Failure("Player must have an active bet to double down.");
+        }
+
+        var originalBet = player.CurrentBet;
+        try
+        {
+            // Create double down bet (this will validate sufficient funds)
+            var doubleDownBet = originalBet.CreateDoubleDownBet();
+            
+            // Deduct additional bet amount from bankroll
+            player.DeductFunds(originalBet.Amount);
+            
+            // Clear the original bet and place the double down bet
+            player.ClearBet();
+            player.PlaceBet(doubleDownBet.Amount, BetType.DoubleDown);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return PlayerActionResult.Failure($"Cannot double down: {ex.Message}");
+        }
+
+        // Deal exactly one card
+        player.AddCard(_shoe.Draw());
+
+        // Player's turn ends after double down regardless of hand value
+        AdvanceToNextActivePlayer();
+        return PlayerActionResult.SuccessEndTurn(player.Hand, isDoubleDown: true);
+    }
+
+    /// <inheritdoc />
+    public async Task<PlayerActionResult> ProcessDoubleDownAsync(string playerName)
+    {
+        return await Task.FromResult(ProcessPlayerAction(playerName, PlayerAction.DoubleDown));
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CanPlayerDoubleDownAsync(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return await Task.FromResult(false);
+        }
+
+        var player = GetPlayer(playerName);
+        if (player == null)
+        {
+            return await Task.FromResult(false);
+        }
+
+        return await Task.FromResult(CanPlayerDoubleDown(player));
+    }
+
+    /// <inheritdoc />
+    public async Task<PlayerActionResult> ProcessSplitAsync(string playerName)
+    {
+        return await Task.FromResult(ProcessPlayerAction(playerName, PlayerAction.Split));
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CanPlayerSplitAsync(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return await Task.FromResult(false);
+        }
+
+        var player = GetPlayer(playerName);
+        if (player == null)
+        {
+            return await Task.FromResult(false);
+        }
+
+        return await Task.FromResult(CanPlayerSplit(player));
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Hand> GetPlayerHands(string playerName)
+    {
+        var playerHands = GetPlayerHandsInternal(playerName);
+        return playerHands.Select(ph => ph.Hand).ToList().AsReadOnly();
+    }
+
+    /// <summary>
+    /// Gets all PlayerHand objects for a specific player (internal use).
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    /// <returns>A read-only list of the player's PlayerHand objects.</returns>
+    private IReadOnlyList<PlayerHand> GetPlayerHandsInternal(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return new List<PlayerHand>().AsReadOnly();
+        }
+
+        if (_playerHands.TryGetValue(playerName, out var hands))
+        {
+            return hands.AsReadOnly();
+        }
+
+        // If no split hands exist, return the player's main hand
+        var player = GetPlayer(playerName);
+        if (player?.HasActiveBet == true && player.CurrentBet != null)
+        {
+            var mainHand = new PlayerHand(player.Hand, player.CurrentBet);
+            return new List<PlayerHand> { mainHand }.AsReadOnly();
+        }
+
+        return new List<PlayerHand>().AsReadOnly();
+    }
+
+    /// <summary>
+    /// Gets the current active hand for a player.
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    /// <returns>The current active hand, or null if none exists.</returns>
+    public PlayerHand? GetCurrentPlayerHand(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return null;
+        }
+
+        var hands = GetPlayerHandsInternal(playerName);
+        if (hands.Count == 0)
+        {
+            return null;
+        }
+
+        if (!_currentHandIndex.TryGetValue(playerName, out var handIndex))
+        {
+            handIndex = 0;
+        }
+
+        return handIndex < hands.Count ? hands[handIndex] : null;
+    }
+
+    /// <summary>
+    /// Advances to the next hand for a player.
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    /// <returns>True if there is a next hand, false if all hands are complete.</returns>
+    public bool AdvanceToNextPlayerHand(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return false;
+        }
+
+        var hands = GetPlayerHandsInternal(playerName);
+        if (hands.Count <= 1)
+        {
+            return false; // No multiple hands to advance through
+        }
+
+        if (!_currentHandIndex.TryGetValue(playerName, out var currentIndex))
+        {
+            currentIndex = 0;
+        }
+
+        // Mark current hand as inactive
+        if (currentIndex < hands.Count)
+        {
+            hands[currentIndex].MarkAsInactive();
+        }
+
+        // Find next active hand
+        do
+        {
+            currentIndex++;
+        } while (currentIndex < hands.Count && !hands[currentIndex].IsActive);
+
+        _currentHandIndex[playerName] = currentIndex;
+        return currentIndex < hands.Count;
+    }
+
+    /// <summary>
+    /// Determines if a player has more hands to play.
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    /// <returns>True if the player has more active hands, false otherwise.</returns>
+    public bool PlayerHasMoreHands(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return false;
+        }
+
+        var hands = GetPlayerHandsInternal(playerName);
+        if (!_currentHandIndex.TryGetValue(playerName, out var currentIndex))
+        {
+            currentIndex = 0;
+        }
+
+        // Check if there are any active hands after the current one
+        for (int i = currentIndex + 1; i < hands.Count; i++)
+        {
+            if (hands[i].IsActive)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Initializes multiple hands tracking for a player.
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    private void InitializePlayerHands(string playerName)
+    {
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            return;
+        }
+
+        var player = GetPlayer(playerName);
+        if (player?.HasActiveBet == true && player.CurrentBet != null)
+        {
+            var mainHand = new PlayerHand(player.Hand, player.CurrentBet);
+            _playerHands[playerName] = new List<PlayerHand> { mainHand };
+            _currentHandIndex[playerName] = 0;
+        }
+    }
+
+    /// <summary>
+    /// Clears multiple hands tracking for all players.
+    /// </summary>
+    private void ClearAllPlayerHands()
+    {
+        _playerHands.Clear();
+        _currentHandIndex.Clear();
+    }
+
+    private PlayerActionResult ProcessSplitAction(Player player)
+    {
+        // Validate that player can split
+        if (!CanPlayerSplit(player))
+        {
+            return PlayerActionResult.Failure("Cannot split. Player must have exactly 2 cards of the same rank and sufficient funds.");
+        }
+
+        if (_shoe.RemainingCards < 2)
+        {
+            return PlayerActionResult.Failure("Not enough cards available in the shoe to split.");
+        }
+
+        // For now, we'll implement a basic split that creates a new hand but doesn't fully support multiple hands
+        // This will be enhanced in task 4.3
+        try
+        {
+            var originalBet = player.CurrentBet!;
+            
+            // Create split bet (this will validate sufficient funds)
+            var splitBet = _splitHandManager.CreateSplitBet(originalBet);
+            
+            // Deduct additional bet amount from bankroll
+            player.DeductFunds(originalBet.Amount);
+            
+            // Split the hand
+            var (firstHand, secondHand) = _splitHandManager.SplitHand(player.Hand);
+            
+            // For now, we'll just replace the player's hand with the first split hand
+            // and deal one card to it. Full multiple hand support will be in task 4.3
+            player.ClearHand();
+            player.AddCard(firstHand.Cards[0]);
+            
+            // Deal one card to the first hand
+            player.AddCard(_shoe.Draw());
+            
+            // Mark as split hand
+            player.Hand.MarkAsSplitHand();
+            
+            // Update bet to split bet
+            player.ClearBet();
+            player.PlaceBet(splitBet.Amount, BetType.Split);
+            
+            // For split Aces, the hand is complete after one card
+            if (firstHand.Cards[0].Rank == Rank.Ace)
+            {
+                player.Hand.MarkAsComplete();
+                AdvanceToNextActivePlayer();
+                return PlayerActionResult.SuccessEndTurn(player.Hand, isSplit: true);
+            }
+            
+            // For other splits, player can continue playing
+            return PlayerActionResult.Success(player.Hand, shouldContinueTurn: true, isSplit: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return PlayerActionResult.Failure($"Cannot split: {ex.Message}");
+        }
+    }
+
+    private bool CanPlayerSplit(Player player)
+    {
+        // Must have exactly 2 cards of the same rank
+        if (!_gameRules.CanSplit(player.Hand))
+        {
+            return false;
+        }
+
+        // Must not be busted or have blackjack
+        if (player.IsBusted() || player.HasBlackjack())
+        {
+            return false;
+        }
+
+        // Must have an active bet and sufficient funds to match it
+        if (!player.HasActiveBet || player.CurrentBet == null)
+        {
+            return false;
+        }
+
+        return player.HasSufficientFunds(player.CurrentBet.Amount);
+    }
+
+    private bool CanPlayerDoubleDown(Player player)
+    {
+        // Must have exactly 2 cards
+        if (player.GetCardCount() != 2)
+        {
+            return false;
+        }
+
+        // Must not be busted or have blackjack
+        if (player.IsBusted() || player.HasBlackjack())
+        {
+            return false;
+        }
+
+        // Must have an active bet and sufficient funds to double it
+        if (!player.HasActiveBet || player.CurrentBet == null)
+        {
+            return false;
+        }
+
+        return player.HasSufficientFunds(player.CurrentBet.Amount);
+    }
+
     private void AdvanceToNextActivePlayer()
     {
+        // First, check if current player has more hands to play
+        if (_currentPlayerIndex < _players.Count)
+        {
+            var currentPlayer = _players[_currentPlayerIndex];
+            if (PlayerHasMoreHands(currentPlayer.Name))
+            {
+                AdvanceToNextPlayerHand(currentPlayer.Name);
+                return; // Stay with same player, different hand
+            }
+        }
+
+        // Move to next player
         do
         {
             _currentPlayerIndex++;
         } while (_currentPlayerIndex < _players.Count && 
-                 (_players[_currentPlayerIndex].HasBlackjack() || _players[_currentPlayerIndex].IsBusted()));
+                 IsPlayerCompletelyDone(_players[_currentPlayerIndex]));
+
+        // If we found a new player, initialize their hands and reset to first hand
+        if (_currentPlayerIndex < _players.Count)
+        {
+            var nextPlayer = _players[_currentPlayerIndex];
+            InitializePlayerHands(nextPlayer.Name);
+            _currentHandIndex[nextPlayer.Name] = 0;
+            return;
+        }
 
         // No more active players, check if we should move to dealer turn
         if (_currentPlayerIndex >= _players.Count)
         {
-            // Check if any players are still in the game (not busted)
-            var playersStillInGame = _players.Any(p => !p.IsBusted());
+            // Check if any players are still in the game (not all hands busted)
+            var playersStillInGame = _players.Any(p => !AreAllPlayerHandsBusted(p.Name));
             
             if (playersStillInGame)
             {
@@ -361,5 +751,40 @@ public class GameService : IGameService
                 _currentPhase = GamePhase.Results;
             }
         }
+    }
+
+    /// <summary>
+    /// Determines if a player is completely done (all hands complete or busted).
+    /// </summary>
+    /// <param name="player">The player to check.</param>
+    /// <returns>True if the player is completely done, false otherwise.</returns>
+    private bool IsPlayerCompletelyDone(Player player)
+    {
+        // Check if player has blackjack or is busted on their main hand
+        if (player.HasBlackjack() || player.IsBusted())
+        {
+            return true;
+        }
+
+        // Check if all player hands are complete
+        var hands = GetPlayerHandsInternal(player.Name);
+        return hands.Count > 0 && hands.All(h => h.IsComplete);
+    }
+
+    /// <summary>
+    /// Determines if all of a player's hands are busted.
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    /// <returns>True if all hands are busted, false otherwise.</returns>
+    private bool AreAllPlayerHandsBusted(string playerName)
+    {
+        var hands = GetPlayerHandsInternal(playerName);
+        if (hands.Count == 0)
+        {
+            var player = GetPlayer(playerName);
+            return player?.IsBusted() == true;
+        }
+
+        return hands.All(h => h.IsBusted);
     }
 }

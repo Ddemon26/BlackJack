@@ -404,4 +404,517 @@ public class GameServiceTests
         _mockGameRules.Setup(r => r.ShouldDealerHit(It.IsAny<int>())).Returns(false);
         _gameService.PlayDealerTurn();
     }
+
+    #region Double Down Tests
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithValidConditions_ReturnsSuccessAndEndsPlayerTurn()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        _mockShoe.Setup(s => s.IsEmpty).Returns(false);
+        _mockShoe.Setup(s => s.Draw()).Returns(new Card(Suit.Hearts, Rank.Five));
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.DoubleDown, It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.False(result.ShouldContinueTurn);
+        Assert.True(result.IsDoubleDown);
+        Assert.NotNull(result.UpdatedHand);
+        Assert.Equal(3, result.UpdatedHand.CardCount); // Original 2 cards + 1 double down card
+        
+        // Verify bet was doubled
+        Assert.Equal(new Money(20m), player.CurrentBet!.Amount);
+        Assert.Equal(BetType.DoubleDown, player.CurrentBet.Type);
+        
+        // Verify bankroll was reduced by additional bet amount
+        Assert.Equal(new Money(80m), player.Bankroll);
+        
+        _mockShoe.Verify(s => s.Draw(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithInsufficientFunds_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with insufficient bankroll
+        player.SetBankroll(new Money(15m));
+        player.PlaceBet(new Money(10m));
+        
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.DoubleDown, It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Cannot double down", result.ErrorMessage!);
+        
+        // Verify original bet remains unchanged
+        Assert.Equal(new Money(10m), player.CurrentBet!.Amount);
+        Assert.Equal(BetType.Standard, player.CurrentBet.Type);
+    }
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithMoreThanTwoCards_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Add a third card to make double down invalid
+        player.AddCard(new Card(Suit.Clubs, Rank.Three));
+        
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.DoubleDown, It.IsAny<Hand>())).Returns(false);
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Cannot double down", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithBlackjack_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add blackjack cards
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Ace));
+        player.AddCard(new Card(Suit.Spades, Rank.King));
+        
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.DoubleDown, It.IsAny<Hand>())).Returns(false);
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Cannot double down", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithNoBet_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll but no bet
+        player.SetBankroll(new Money(100m));
+        
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.DoubleDown, It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Player must have an active bet to double down", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithEmptyShoe_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        _mockShoe.Setup(s => s.IsEmpty).Returns(true);
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.DoubleDown, It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("No more cards available in the shoe", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task ProcessDoubleDownAsync_WithInvalidPlayerName_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+
+        // Act
+        var result = await _gameService.ProcessDoubleDownAsync("NonExistentPlayer");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Player 'NonExistentPlayer' not found", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task CanPlayerDoubleDownAsync_WithValidConditions_ReturnsTrue()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+
+        // Act
+        var canDoubleDown = await _gameService.CanPlayerDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.True(canDoubleDown);
+    }
+
+    [Fact]
+    public async Task CanPlayerDoubleDownAsync_WithInsufficientFunds_ReturnsFalse()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with insufficient bankroll
+        player.SetBankroll(new Money(5m));
+        player.PlaceBet(new Money(10m));
+
+        // Act
+        var canDoubleDown = await _gameService.CanPlayerDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(canDoubleDown);
+    }
+
+    [Fact]
+    public async Task CanPlayerDoubleDownAsync_WithInvalidPlayerName_ReturnsFalse()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+
+        // Act
+        var canDoubleDown = await _gameService.CanPlayerDoubleDownAsync("NonExistentPlayer");
+
+        // Assert
+        Assert.False(canDoubleDown);
+    }
+
+    [Fact]
+    public async Task CanPlayerDoubleDownAsync_WithNullPlayerName_ReturnsFalse()
+    {
+        // Act
+        var canDoubleDown = await _gameService.CanPlayerDoubleDownAsync(null!);
+
+        // Assert
+        Assert.False(canDoubleDown);
+    }
+
+    [Fact]
+    public async Task CanPlayerDoubleDownAsync_WithMoreThanTwoCards_ReturnsFalse()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Add a third card
+        player.AddCard(new Card(Suit.Clubs, Rank.Three));
+
+        // Act
+        var canDoubleDown = await _gameService.CanPlayerDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(canDoubleDown);
+    }
+
+    [Fact]
+    public async Task CanPlayerDoubleDownAsync_WithBlackjack_ReturnsFalse()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add blackjack cards
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Ace));
+        player.AddCard(new Card(Suit.Spades, Rank.King));
+
+        // Act
+        var canDoubleDown = await _gameService.CanPlayerDoubleDownAsync("Alice");
+
+        // Assert
+        Assert.False(canDoubleDown);
+    }
+
+    #endregion
+
+    #region Split Tests
+
+    [Fact]
+    public async Task ProcessSplitAsync_WithValidPair_ReturnsSuccessAndSplitsHand()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add a pair
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        player.AddCard(new Card(Suit.Spades, Rank.Eight));
+        
+        _mockShoe.Setup(s => s.RemainingCards).Returns(10);
+        _mockShoe.Setup(s => s.Draw()).Returns(new Card(Suit.Clubs, Rank.Five));
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.Split, It.IsAny<Hand>())).Returns(true);
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessSplitAsync("Alice");
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.True(result.IsSplit);
+        Assert.True(result.ShouldContinueTurn); // Non-Ace splits can continue
+        Assert.NotNull(result.UpdatedHand);
+        Assert.Equal(2, result.UpdatedHand.CardCount); // Original card + new card
+        Assert.True(result.UpdatedHand.IsSplitHand);
+        
+        // Verify bet was matched for split
+        Assert.Equal(new Money(10m), player.CurrentBet!.Amount);
+        Assert.Equal(BetType.Split, player.CurrentBet.Type);
+        
+        // Verify bankroll was reduced by additional bet amount
+        Assert.Equal(new Money(80m), player.Bankroll);
+        
+        _mockShoe.Verify(s => s.Draw(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessSplitAsync_WithAces_ReturnsSuccessAndEndsPlayerTurn()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add a pair of Aces
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Ace));
+        player.AddCard(new Card(Suit.Spades, Rank.Ace));
+        
+        _mockShoe.Setup(s => s.RemainingCards).Returns(10);
+        _mockShoe.Setup(s => s.Draw()).Returns(new Card(Suit.Clubs, Rank.Five));
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.Split, It.IsAny<Hand>())).Returns(true);
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessSplitAsync("Alice");
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.True(result.IsSplit);
+        Assert.False(result.ShouldContinueTurn); // Ace splits end the turn
+        Assert.NotNull(result.UpdatedHand);
+        Assert.True(result.UpdatedHand.IsSplitHand);
+        Assert.True(result.UpdatedHand.IsComplete);
+        
+        _mockShoe.Verify(s => s.Draw(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessSplitAsync_WithInsufficientFunds_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with insufficient bankroll
+        player.SetBankroll(new Money(5m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add a pair
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        player.AddCard(new Card(Suit.Spades, Rank.Eight));
+        
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.Split, It.IsAny<Hand>())).Returns(true);
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessSplitAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Cannot split", result.ErrorMessage!);
+        
+        // Verify original bet remains unchanged
+        Assert.Equal(new Money(10m), player.CurrentBet!.Amount);
+        Assert.Equal(BetType.Standard, player.CurrentBet.Type);
+    }
+
+    [Fact]
+    public async Task ProcessSplitAsync_WithNonPair_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add non-matching cards
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        player.AddCard(new Card(Suit.Spades, Rank.Nine));
+        
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.Split, It.IsAny<Hand>())).Returns(false);
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(false);
+
+        // Act
+        var result = await _gameService.ProcessSplitAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Cannot split", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task ProcessSplitAsync_WithInsufficientCards_ReturnsFailure()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add a pair
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        player.AddCard(new Card(Suit.Spades, Rank.Eight));
+        
+        _mockShoe.Setup(s => s.RemainingCards).Returns(1); // Not enough cards
+        _mockGameRules.Setup(r => r.IsValidPlayerAction(PlayerAction.Split, It.IsAny<Hand>())).Returns(true);
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var result = await _gameService.ProcessSplitAsync("Alice");
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Not enough cards available", result.ErrorMessage!);
+    }
+
+    [Fact]
+    public async Task CanPlayerSplitAsync_WithValidPair_ReturnsTrue()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with bankroll and bet
+        player.SetBankroll(new Money(100m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add a pair
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        player.AddCard(new Card(Suit.Spades, Rank.Eight));
+        
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var canSplit = await _gameService.CanPlayerSplitAsync("Alice");
+
+        // Assert
+        Assert.True(canSplit);
+    }
+
+    [Fact]
+    public async Task CanPlayerSplitAsync_WithInsufficientFunds_ReturnsFalse()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+        var player = _gameService.GetPlayer("Alice")!;
+        
+        // Set up player with insufficient bankroll
+        player.SetBankroll(new Money(5m));
+        player.PlaceBet(new Money(10m));
+        
+        // Clear hand and add a pair
+        player.ClearHand();
+        player.AddCard(new Card(Suit.Hearts, Rank.Eight));
+        player.AddCard(new Card(Suit.Spades, Rank.Eight));
+        
+        _mockGameRules.Setup(r => r.CanSplit(It.IsAny<Hand>())).Returns(true);
+
+        // Act
+        var canSplit = await _gameService.CanPlayerSplitAsync("Alice");
+
+        // Assert
+        Assert.False(canSplit);
+    }
+
+    [Fact]
+    public async Task CanPlayerSplitAsync_WithInvalidPlayerName_ReturnsFalse()
+    {
+        // Arrange
+        SetupGameWithDealtCards();
+
+        // Act
+        var canSplit = await _gameService.CanPlayerSplitAsync("NonExistentPlayer");
+
+        // Assert
+        Assert.False(canSplit);
+    }
+
+    [Fact]
+    public async Task CanPlayerSplitAsync_WithNullPlayerName_ReturnsFalse()
+    {
+        // Act
+        var canSplit = await _gameService.CanPlayerSplitAsync(null!);
+
+        // Assert
+        Assert.False(canSplit);
+    }
+
+    #endregion
 }

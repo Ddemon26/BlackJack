@@ -87,4 +87,43 @@ public interface IGameService
     /// Gets a value indicating whether a game is currently in progress.
     /// </summary>
     bool IsGameInProgress { get; }
+
+    /// <summary>
+    /// Processes a double down action for the specified player.
+    /// </summary>
+    /// <param name="playerName">The name of the player performing the double down.</param>
+    /// <returns>A task that returns the result of the double down action.</returns>
+    /// <exception cref="ArgumentException">Thrown when the player name is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when double down is not allowed.</exception>
+    Task<PlayerActionResult> ProcessDoubleDownAsync(string playerName);
+
+    /// <summary>
+    /// Determines if the specified player can double down.
+    /// </summary>
+    /// <param name="playerName">The name of the player to check.</param>
+    /// <returns>A task that returns true if the player can double down, false otherwise.</returns>
+    Task<bool> CanPlayerDoubleDownAsync(string playerName);
+
+    /// <summary>
+    /// Processes a split action for the specified player.
+    /// </summary>
+    /// <param name="playerName">The name of the player performing the split.</param>
+    /// <returns>A task that returns the result of the split action.</returns>
+    /// <exception cref="ArgumentException">Thrown when the player name is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when split is not allowed.</exception>
+    Task<PlayerActionResult> ProcessSplitAsync(string playerName);
+
+    /// <summary>
+    /// Determines if the specified player can split their hand.
+    /// </summary>
+    /// <param name="playerName">The name of the player to check.</param>
+    /// <returns>A task that returns true if the player can split, false otherwise.</returns>
+    Task<bool> CanPlayerSplitAsync(string playerName);
+
+    /// <summary>
+    /// Gets all hands for the specified player.
+    /// </summary>
+    /// <param name="playerName">The name of the player.</param>
+    /// <returns>A read-only list of all hands belonging to the player.</returns>
+    IReadOnlyList<Hand> GetPlayerHands(string playerName);
 }

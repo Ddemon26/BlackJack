@@ -12,6 +12,8 @@ public class Hand
     private readonly List<Card> _cards = new();
     private int _cachedValue = -1;
     private bool _valueCacheValid = false;
+    private bool _isSplitHand = false;
+    private bool _isComplete = false;
 
     /// <summary>
     /// Gets the cards in this hand as a read-only collection.
@@ -22,6 +24,16 @@ public class Hand
     /// Gets the number of cards in this hand.
     /// </summary>
     public int CardCount => _cards.Count;
+
+    /// <summary>
+    /// Gets a value indicating whether this hand is a result of a split operation.
+    /// </summary>
+    public bool IsSplitHand => _isSplitHand;
+
+    /// <summary>
+    /// Gets a value indicating whether this hand is complete (no more cards can be added).
+    /// </summary>
+    public bool IsComplete => _isComplete;
 
     /// <summary>
     /// Adds a card to this hand.
@@ -39,7 +51,45 @@ public class Hand
     public void Clear()
     {
         _cards.Clear();
+        _isSplitHand = false;
+        _isComplete = false;
         InvalidateCache();
+    }
+
+    /// <summary>
+    /// Marks this hand as a split hand.
+    /// </summary>
+    public void MarkAsSplitHand()
+    {
+        _isSplitHand = true;
+    }
+
+    /// <summary>
+    /// Marks this hand as complete (no more cards can be added).
+    /// </summary>
+    public void MarkAsComplete()
+    {
+        _isComplete = true;
+    }
+
+    /// <summary>
+    /// Determines if this hand can receive more cards.
+    /// </summary>
+    /// <returns>True if more cards can be added, false otherwise.</returns>
+    public bool CanReceiveMoreCards()
+    {
+        if (_isComplete || IsBusted() || IsBlackjack())
+        {
+            return false;
+        }
+
+        // Split Aces can only receive one additional card
+        if (_isSplitHand && _cards.Count == 2 && _cards[0].Rank == Rank.Ace)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
