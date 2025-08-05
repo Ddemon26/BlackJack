@@ -5,24 +5,30 @@ using GroupProject.Infrastructure.Extensions;
 
 namespace GroupProject;
 
-internal static class Program {
-    const string HELLO_WORLD = "--helloworld";
-    const string BLACKJACK = "--blackjack";
-    const string TEST_HAND = "--testhand";
-    const string TEST_DECK = "--testdeck";
-    const string TEST_PLAYER = "--testplayer";
+/// <summary>
+/// Main program entry point for the GroupProject application.
+/// Provides command-line interface for various application features including blackjack game and testing utilities.
+/// </summary>
+internal static class Program 
+{
+    private const string BLACKJACK = "--blackjack";
+    private const string TEST_HAND = "--testhand";
+    private const string TEST_DECK = "--testdeck";
+    private const string TEST_PLAYER = "--testplayer";
 
-    static async Task<int> Main(string[] args) {
+    /// <summary>
+    /// Main application entry point with comprehensive error handling and dependency injection setup.
+    /// </summary>
+    /// <param name="args">Command-line arguments</param>
+    /// <returns>Exit code: 0 for success, 1 for failure</returns>
+    static async Task<int> Main(string[] args) 
+    {
         try
         {
             string[] processedArgs = ProcessArgs(args);
             
-            switch (processedArgs.Length) {
-                case > 0 when processedArgs[0].Equals(HELLO_WORLD):
-                {
-                    await RunWithGlobalErrorHandling(() => RunHelloWorldAsync());
-                    break;
-                }
+            switch (processedArgs.Length) 
+            {
                 case > 0 when processedArgs[0].Equals(BLACKJACK):
                 {
                     await RunWithGlobalErrorHandling(() => RunBlackjackGameAsync());
@@ -45,12 +51,7 @@ internal static class Program {
                 }
                 default:
                 {
-                    Console.WriteLine("Available commands:");
-                    Console.WriteLine("  --helloworld  : Run hello world example");
-                    Console.WriteLine("  --blackjack   : Start blackjack game");
-                    Console.WriteLine("  --testhand    : Run Hand class tests");
-                    Console.WriteLine("  --testdeck    : Run Deck and Shoe class tests");
-                    Console.WriteLine("  --testplayer  : Run Player class tests");
+                    ShowUsageInformation();
                     break;
                 }
             }
@@ -103,13 +104,21 @@ internal static class Program {
     }
 
     /// <summary>
-    /// Runs the hello world example.
+    /// Displays usage information for available commands.
     /// </summary>
-    static async Task RunHelloWorldAsync()
+    private static void ShowUsageInformation()
     {
-        using var host = Host<Something>();
-        var something = host.Services.GetRequiredService<Something>();
-        await Task.Run(() => something.DoSomething());
+        Console.WriteLine("GroupProject - Blackjack Game Application");
+        Console.WriteLine();
+        Console.WriteLine("Available commands:");
+        Console.WriteLine("  --blackjack   : Start blackjack game");
+        Console.WriteLine("  --testhand    : Run Hand class tests");
+        Console.WriteLine("  --testdeck    : Run Deck and Shoe class tests");
+        Console.WriteLine("  --testplayer  : Run Player class tests");
+        Console.WriteLine();
+        Console.WriteLine("Example usage:");
+        Console.WriteLine("  dotnet run --blackjack");
+        Console.WriteLine("  dotnet run --testhand");
     }
 
     /// <summary>
@@ -139,84 +148,78 @@ internal static class Program {
     }
 
     /// <summary>
-    /// Creates a host configured for the blackjack game.
+    /// Creates a host configured for the blackjack game with full dependency injection setup.
     /// </summary>
     /// <returns>A configured host for the blackjack application.</returns>
-    static IHost CreateBlackjackHost()
+    private static IHost CreateBlackjackHost()
     {
         return new HostBuilder()
-            .ConfigureServices((_, services) => {
+            .ConfigureServices((_, services) => 
+            {
                 services.AddBlackjackServices();
             })
             .Build();
     }
     
-    static void RunHandTests()
+    /// <summary>
+    /// Runs comprehensive tests for the Hand class implementation.
+    /// </summary>
+    private static void RunHandTests()
     {
         try
         {
+            Console.WriteLine("Running Hand class tests...");
             GroupProject.Domain.Entities.HandTestRunner.RunTests();
             Console.WriteLine("\n🎉 All tests passed! Hand implementation is working correctly.");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"\n❌ Test failed: {ex.Message}");
+            throw; // Re-throw to be handled by global error handler
         }
     }
     
-    static void RunDeckTests()
+    /// <summary>
+    /// Runs comprehensive tests for the Deck and Shoe class implementations.
+    /// </summary>
+    private static void RunDeckTests()
     {
         try
         {
+            Console.WriteLine("Running Deck and Shoe class tests...");
             GroupProject.Domain.Entities.DeckAndShoeTestRunner.RunTests();
             Console.WriteLine("\n🎉 All tests passed! Deck and Shoe implementations are working correctly.");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"\n❌ Test failed: {ex.Message}");
+            throw; // Re-throw to be handled by global error handler
         }
     }
     
-    static void RunPlayerTests()
+    /// <summary>
+    /// Runs comprehensive tests for the Player class implementation.
+    /// </summary>
+    private static void RunPlayerTests()
     {
         try
         {
+            Console.WriteLine("Running Player class tests...");
             GroupProject.Domain.Entities.PlayerTestRunner.RunTests();
             Console.WriteLine("\n🎉 All tests passed! Player implementation is working correctly.");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"\n❌ Test failed: {ex.Message}");
+            throw; // Re-throw to be handled by global error handler
         }
     }
     
-    static IHost Host<T>() where T : class {
-        IHost? host = null;
-        try {
-            host = new HostBuilder()
-                .ConfigureServices((_, services) => {
-                    services.AddSingleton<T>();
-                })
-                .Build();
-            return host;
-        }
-        catch {
-            host?.Dispose();
-            throw;
-        }
-    }
-
-    static string[] ProcessArgs(string[] args)
+    /// <summary>
+    /// Processes command-line arguments by converting them to lowercase for case-insensitive comparison.
+    /// </summary>
+    /// <param name="args">Raw command-line arguments</param>
+    /// <returns>Processed arguments in lowercase</returns>
+    private static string[] ProcessArgs(string[] args)
         => args.Select(arg => arg.ToLowerInvariant()).ToArray();
-}
-
-internal class Something {
-    string m_text;
-    public Something() {
-        m_text = "Hello, World!";
-    }
-
-    public void DoSomething() {
-        Console.WriteLine($"{m_text}");
-    }
 }
