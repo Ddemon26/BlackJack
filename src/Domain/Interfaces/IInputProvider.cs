@@ -40,5 +40,25 @@ namespace GroupProject.Domain.Interfaces
         /// <param name="prompt">The prompt message to display to the user.</param>
         /// <returns>A task that represents the asynchronous operation. The task result is true for yes, false for no.</returns>
         Task<bool> GetConfirmationAsync(string prompt);
+
+        /// <summary>
+        /// Prompts the user for a monetary bet amount within the specified range.
+        /// </summary>
+        /// <param name="prompt">The prompt message to display to the user.</param>
+        /// <param name="minBet">The minimum allowed bet amount.</param>
+        /// <param name="maxBet">The maximum allowed bet amount.</param>
+        /// <param name="availableFunds">The player's available funds.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the validated bet amount.</returns>
+        Task<Money> GetBetAmountAsync(string prompt, Money minBet, Money maxBet, Money availableFunds);
+
+        /// <summary>
+        /// Prompts the user for their initial bankroll amount.
+        /// </summary>
+        /// <param name="playerName">The name of the player.</param>
+        /// <param name="defaultAmount">The default bankroll amount to suggest.</param>
+        /// <param name="minAmount">The minimum allowed bankroll amount.</param>
+        /// <param name="maxAmount">The maximum allowed bankroll amount.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the initial bankroll amount.</returns>
+        Task<Money> GetInitialBankrollAsync(string playerName, Money defaultAmount, Money minAmount, Money maxAmount);
     }
 }

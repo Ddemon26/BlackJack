@@ -226,14 +226,14 @@ public class GameOrchestratorShoeManagementTests
         _mockGameService.Setup(gs => gs.DealInitialCards());
         _mockGameService.Setup(gs => gs.GetCurrentGameState())
                        .Returns(new GameState(
-                           new List<Domain.Entities.Player>().AsReadOnly(),
-                           new Domain.Entities.Player("Dealer", Domain.Entities.PlayerType.Dealer),
+                           new List<GroupProject.Domain.Entities.Player>().AsReadOnly(),
+                           new GroupProject.Domain.Entities.Player("Dealer", GroupProject.Domain.ValueObjects.PlayerType.Dealer),
                            GamePhase.GameOver,
                            null));
         _mockGameService.Setup(gs => gs.GetGameResults())
                        .Returns(new GameSummary(
                            new Dictionary<string, GameResult>(),
-                           new Domain.Entities.Hand(),
+                           new GroupProject.Domain.Entities.Hand(),
                            DateTime.UtcNow));
 
         // Setup user interface mocks

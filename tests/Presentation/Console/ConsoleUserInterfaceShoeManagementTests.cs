@@ -36,7 +36,7 @@ public class ConsoleUserInterfaceShoeManagementTests
         await _consoleUserInterface.ShowShoeReshuffleNotificationAsync(reshuffleEventArgs);
 
         // Assert
-        _mockOutputProvider.Verify(op => op.WriteLineAsync(), Times.AtLeast(2)); // Empty lines
+        _mockOutputProvider.Verify(op => op.WriteLineAsync(null), Times.AtLeast(2)); // Empty lines
         _mockOutputProvider.Verify(op => op.WriteLineAsync(It.Is<string>(s => s.Contains("SHOE RESHUFFLED"))), Times.Once);
         _mockOutputProvider.Verify(op => op.WriteLineAsync(It.Is<string>(s => s.Contains("Reason: Automatic reshuffle triggered by penetration threshold"))), Times.Once);
         _mockOutputProvider.Verify(op => op.WriteLineAsync(It.Is<string>(s => s.Contains("Cards remaining when triggered: 15.0%"))), Times.Once);
@@ -82,7 +82,7 @@ public class ConsoleUserInterfaceShoeManagementTests
         await _consoleUserInterface.ShowShoeStatusAsync(shoeStatus);
 
         // Assert
-        _mockOutputProvider.Verify(op => op.WriteLineAsync(), Times.AtLeast(2)); // Empty lines
+        _mockOutputProvider.Verify(op => op.WriteLineAsync(null), Times.AtLeast(2)); // Empty lines
         _mockOutputProvider.Verify(op => op.WriteLineAsync(It.Is<string>(s => s.Contains("SHOE STATUS"))), Times.Once);
         _mockOutputProvider.Verify(op => op.WriteLineAsync(It.Is<string>(s => s.Contains("Decks: 6"))), Times.Once);
         _mockOutputProvider.Verify(op => op.WriteLineAsync(It.Is<string>(s => s.Contains("Cards remaining: 150/312"))), Times.Once);

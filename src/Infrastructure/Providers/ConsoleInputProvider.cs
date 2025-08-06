@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Infrastructure.Formatting;
 
 namespace GroupProject.Infrastructure.Providers
 {
@@ -237,6 +239,200 @@ namespace GroupProject.Infrastructure.Providers
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Prompts the user for a monetary bet amount within the specified range.
+        /// Continues prompting until a valid bet amount within the range and available funds is entered.
+        /// </summary>
+        /// <param name="prompt">The prompt message to display to the user.</param>
+        /// <param name="minBet">The minimum allowed bet amount.</param>
+        /// <param name="maxBet">The maximum allowed bet amount.</param>
+        /// <param name="availableFunds">The player's available funds.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the validated bet amount.</returns>
+        public async Task<Money> GetBetAmountAsync(string prompt, Money minBet, Money maxBet, Money availableFunds)
+        {
+            if (string.IsNullOrEmpty(prompt))
+                throw new ArgumentException("Prompt cannot be null or empty.", nameof(prompt));
+
+            if (minBet > maxBet)
+                throw new ArgumentException("Minimum bet cannot be greater than maximum bet.");
+
+            if (availableFunds < minBet)
+                throw new ArgumentException("Available funds are insufficient for minimum bet.");
+
+            // Determine the effective maximum bet (limited by available funds)
+            var effectiveMaxBet = availableFunds < maxBet ? availableFunds : maxBet;
+
+            var attempts = 0;
+            const int maxAttempts = 5;
+
+            while (true)
+            {
+                attempts++;
+                
+                // Display betting information
+                await _outputProvider.WriteLineAsync($"Available funds: {MoneyFormatter.FormatWithSymbol(availableFunds)}");
+                await _outputProvider.WriteLineAsync($"Betting range: {MoneyFormatter.FormatWithSymbol(minBet)} - {MoneyFormatter.FormatWithSymbol(effectiveMaxBet)}");
+                
+                var input = await GetInputAsync($"{prompt}");
+                
+                // Handle empty input
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    await _outputProvider.WriteLineAsync("❌ Bet amount cannot be empty. Please enter an amount.");
+                    continue;
+                }
+
+                // Parse the monetary input
+                var betAmount = ParseMoneyInput(input, minBet.Currency);
+                
+                if (betAmount == null)
+                {
+                    await _outputProvider.WriteLineAsync($"❌ '{input}' is not a valid monetary amount.");
+                    if (attempts == 1)
+                    {
+                        await _outputProvider.WriteLineAsync($"💡 Examples: {MoneyFormatter.FormatWithSymbol(minBet)}, {MoneyFormatter.FormatWithSymbol(new Money(25m))}, {MoneyFormatter.FormatWithSymbol(effectiveMaxBet)}");
+                    }
+                    continue;
+                }
+
+                // Validate bet amount is within range
+                if (betAmount < minBet)
+                {
+                    await _outputProvider.WriteLineAsync($"❌ Bet amount {MoneyFormatter.FormatWithSymbol(betAmount.Value)} is below minimum bet of {MoneyFormatter.FormatWithSymbol(minBet)}.");
+                    continue;
+                }
+
+                if (betAmount > effectiveMaxBet)
+                {
+                    if (effectiveMaxBet < maxBet)
+                    {
+                        await _outputProvider.WriteLineAsync($"❌ Bet amount {MoneyFormatter.FormatWithSymbol(betAmount.Value)} exceeds available funds of {MoneyFormatter.FormatWithSymbol(availableFunds)}.");
+                    }
+                    else
+                    {
+                        await _outputProvider.WriteLineAsync($"❌ Bet amount {MoneyFormatter.FormatWithSymbol(betAmount.Value)} exceeds maximum bet of {MoneyFormatter.FormatWithSymbol(maxBet)}.");
+                    }
+                    continue;
+                }
+
+                return betAmount.Value;
+            }
+        }
+
+        /// <summary>
+        /// Prompts the user for their initial bankroll amount.
+        /// Continues prompting until a valid bankroll amount within the range is entered.
+        /// </summary>
+        /// <param name="playerName">The name of the player.</param>
+        /// <param name="defaultAmount">The default bankroll amount to suggest.</param>
+        /// <param name="minAmount">The minimum allowed bankroll amount.</param>
+        /// <param name="maxAmount">The maximum allowed bankroll amount.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the initial bankroll amount.</returns>
+        public async Task<Money> GetInitialBankrollAsync(string playerName, Money defaultAmount, Money minAmount, Money maxAmount)
+        {
+            if (string.IsNullOrWhiteSpace(playerName))
+                throw new ArgumentException("Player name cannot be null or empty.", nameof(playerName));
+
+            if (minAmount > maxAmount)
+                throw new ArgumentException("Minimum amount cannot be greater than maximum amount.");
+
+            if (defaultAmount < minAmount || defaultAmount > maxAmount)
+                throw new ArgumentException("Default amount must be within the specified range.");
+
+            var attempts = 0;
+            const int maxAttempts = 5;
+
+            await _outputProvider.WriteLineAsync($"Setting up bankroll for {playerName}:");
+            await _outputProvider.WriteLineAsync($"Range: {MoneyFormatter.FormatWithSymbol(minAmount)} - {MoneyFormatter.FormatWithSymbol(maxAmount)}");
+            await _outputProvider.WriteLineAsync($"Default: {MoneyFormatter.FormatWithSymbol(defaultAmount)}");
+
+            while (true)
+            {
+                attempts++;
+                
+                var input = await GetInputAsync($"Enter initial bankroll for {playerName} (or press Enter for default)");
+                
+                // Handle empty input - use default
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    await _outputProvider.WriteLineAsync($"✓ Using default bankroll: {MoneyFormatter.FormatWithSymbol(defaultAmount)}");
+                    return defaultAmount;
+                }
+
+                // Parse the monetary input
+                var bankrollAmount = ParseMoneyInput(input, defaultAmount.Currency);
+                
+                if (bankrollAmount == null)
+                {
+                    await _outputProvider.WriteLineAsync($"❌ '{input}' is not a valid monetary amount.");
+                    if (attempts == 1)
+                    {
+                        await _outputProvider.WriteLineAsync($"💡 Examples: {MoneyFormatter.FormatWithSymbol(minAmount)}, {MoneyFormatter.FormatWithSymbol(defaultAmount)}, {MoneyFormatter.FormatWithSymbol(maxAmount)}");
+                    }
+                    continue;
+                }
+
+                // Validate bankroll amount is within range
+                if (bankrollAmount < minAmount)
+                {
+                    await _outputProvider.WriteLineAsync($"❌ Bankroll amount {MoneyFormatter.FormatWithSymbol(bankrollAmount.Value)} is below minimum of {MoneyFormatter.FormatWithSymbol(minAmount)}.");
+                    continue;
+                }
+
+                if (bankrollAmount > maxAmount)
+                {
+                    await _outputProvider.WriteLineAsync($"❌ Bankroll amount {MoneyFormatter.FormatWithSymbol(bankrollAmount.Value)} exceeds maximum of {MoneyFormatter.FormatWithSymbol(maxAmount)}.");
+                    continue;
+                }
+
+                await _outputProvider.WriteLineAsync($"✓ Bankroll set to: {MoneyFormatter.FormatWithSymbol(bankrollAmount.Value)}");
+                return bankrollAmount.Value;
+            }
+        }
+
+        /// <summary>
+        /// Parses a string input into a Money value object.
+        /// Supports various input formats including currency symbols and decimal amounts.
+        /// </summary>
+        /// <param name="input">The input string to parse.</param>
+        /// <param name="currency">The currency to use for the parsed amount.</param>
+        /// <returns>A Money object if parsing succeeds, null otherwise.</returns>
+        private static Money? ParseMoneyInput(string input, string currency)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return null;
+
+            // Clean the input - remove common currency symbols and extra whitespace
+            var cleanInput = input.Trim()
+                .Replace("$", "")
+                .Replace("€", "")
+                .Replace("£", "")
+                .Replace("¥", "")
+                .Replace(",", "")
+                .Replace(" ", "");
+
+            // Try to parse as decimal
+            if (decimal.TryParse(cleanInput, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, 
+                CultureInfo.InvariantCulture, out var amount))
+            {
+                // Ensure the amount is positive and has at most 2 decimal places
+                if (amount > 0)
+                {
+                    try
+                    {
+                        return new Money(amount, currency);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        // Amount has more than 2 decimal places
+                        return null;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static IEnumerable<string> GetActionPrompts(IEnumerable<PlayerAction> validActions)

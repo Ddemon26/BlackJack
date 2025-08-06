@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GroupProject.Domain.ValueObjects;
 
 namespace GroupProject.Application.Models;
 
@@ -70,6 +71,51 @@ public class GameConfiguration
     public int PlayerNameMaxLength { get; set; } = 20;
 
     /// <summary>
+    /// Gets or sets the minimum bet amount allowed.
+    /// </summary>
+    public Money MinimumBet { get; set; } = new Money(5m);
+
+    /// <summary>
+    /// Gets or sets the maximum bet amount allowed.
+    /// </summary>
+    public Money MaximumBet { get; set; } = new Money(500m);
+
+    /// <summary>
+    /// Gets or sets the default starting bankroll for new players.
+    /// </summary>
+    public Money DefaultBankroll { get; set; } = new Money(1000m);
+
+    /// <summary>
+    /// Gets or sets the minimum bankroll amount allowed.
+    /// </summary>
+    public Money MinimumBankroll { get; set; } = new Money(50m);
+
+    /// <summary>
+    /// Gets or sets the maximum bankroll amount allowed.
+    /// </summary>
+    public Money MaximumBankroll { get; set; } = new Money(10000m);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether automatic reshuffling is enabled.
+    /// </summary>
+    public bool AutoReshuffleEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the card display format preference.
+    /// </summary>
+    public CardDisplayFormat CardDisplayFormat { get; set; } = CardDisplayFormat.Symbols;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to show detailed statistics.
+    /// </summary>
+    public bool ShowDetailedStatistics { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to save game statistics.
+    /// </summary>
+    public bool SaveStatistics { get; set; } = true;
+
+    /// <summary>
     /// Validates the configuration and returns any validation errors.
     /// </summary>
     /// <returns>A collection of validation results, empty if configuration is valid.</returns>
@@ -94,6 +140,38 @@ public class GameConfiguration
             validationResults.Add(new ValidationResult(
                 "Penetration threshold should be lower for multi-deck games to maintain game balance.",
                 new[] { nameof(PenetrationThreshold) }));
+        }
+
+        // Betting validation rules
+        if (MinimumBet >= MaximumBet)
+        {
+            validationResults.Add(new ValidationResult(
+                "Minimum bet must be less than maximum bet.",
+                new[] { nameof(MinimumBet), nameof(MaximumBet) }));
+        }
+
+        if (MinimumBankroll >= MaximumBankroll)
+        {
+            validationResults.Add(new ValidationResult(
+                "Minimum bankroll must be less than maximum bankroll.",
+                new[] { nameof(MinimumBankroll), nameof(MaximumBankroll) }));
+        }
+
+        if (DefaultBankroll < MinimumBankroll || DefaultBankroll > MaximumBankroll)
+        {
+            validationResults.Add(new ValidationResult(
+                "Default bankroll must be within the minimum and maximum bankroll range.",
+                new[] { nameof(DefaultBankroll) }));
+        }
+
+        if (MinimumBet.Currency != MaximumBet.Currency || 
+            MinimumBet.Currency != DefaultBankroll.Currency ||
+            MinimumBet.Currency != MinimumBankroll.Currency ||
+            MinimumBet.Currency != MaximumBankroll.Currency)
+        {
+            validationResults.Add(new ValidationResult(
+                "All monetary amounts must use the same currency.",
+                new[] { nameof(MinimumBet), nameof(MaximumBet), nameof(DefaultBankroll), nameof(MinimumBankroll), nameof(MaximumBankroll) }));
         }
 
         return validationResults;
@@ -122,7 +200,16 @@ public class GameConfiguration
             PenetrationThreshold = PenetrationThreshold,
             BlackjackPayout = BlackjackPayout,
             DealerHitsOnSoft17 = DealerHitsOnSoft17,
-            PlayerNameMaxLength = PlayerNameMaxLength
+            PlayerNameMaxLength = PlayerNameMaxLength,
+            MinimumBet = MinimumBet,
+            MaximumBet = MaximumBet,
+            DefaultBankroll = DefaultBankroll,
+            MinimumBankroll = MinimumBankroll,
+            MaximumBankroll = MaximumBankroll,
+            AutoReshuffleEnabled = AutoReshuffleEnabled,
+            CardDisplayFormat = CardDisplayFormat,
+            ShowDetailedStatistics = ShowDetailedStatistics,
+            SaveStatistics = SaveStatistics
         };
     }
 

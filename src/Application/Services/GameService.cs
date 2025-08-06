@@ -981,7 +981,7 @@ public class GameService : IGameService
     private void AdvanceToNextActivePlayer()
     {
         // First, check if current player has more hands to play
-        if (_currentPlayerIndex < _players.Count)
+        if (_currentPlayerIndex >= 0 && _currentPlayerIndex < _players.Count)
         {
             var currentPlayer = _players[_currentPlayerIndex];
             if (PlayerHasMoreHands(currentPlayer.Name))
@@ -992,11 +992,12 @@ public class GameService : IGameService
         }
 
         // Move to next player
-        do
+        _currentPlayerIndex++;
+        while (_currentPlayerIndex < _players.Count && 
+               IsPlayerCompletelyDone(_players[_currentPlayerIndex]))
         {
             _currentPlayerIndex++;
-        } while (_currentPlayerIndex < _players.Count && 
-                 IsPlayerCompletelyDone(_players[_currentPlayerIndex]));
+        }
 
         // If we found a new player, initialize their hands and reset to first hand
         if (_currentPlayerIndex < _players.Count)
