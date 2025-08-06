@@ -47,6 +47,13 @@ public interface IGameService
     GameSummary GetGameResults();
 
     /// <summary>
+    /// Gets the results of the current game for all players with payout processing.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a summary of game results with payouts.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no game is in progress or game is not complete.</exception>
+    Task<GameSummary> GetGameResultsWithPayoutsAsync();
+
+    /// <summary>
     /// Gets the current game state.
     /// </summary>
     /// <returns>The current game state, or null if no game is in progress.</returns>

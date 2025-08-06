@@ -456,6 +456,50 @@ public class GameService : IGameService
         return new GameSummary(results, _dealer.Hand, DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// Gets the results of the current game for all players with payout processing.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a summary of game results with payouts.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no game is in progress or game is not complete.</exception>
+    public async Task<GameSummary> GetGameResultsWithPayoutsAsync()
+    {
+        if (_currentPhase != GamePhase.Results && _currentPhase != GamePhase.GameOver)
+        {
+            throw new InvalidOperationException("Game results are not available. Game must be complete.");
+        }
+
+        if (_dealer == null)
+        {
+            throw new InvalidOperationException("No dealer found in the current game.");
+        }
+
+        var results = new Dictionary<string, GameResult>();
+
+        // Determine game results for each player
+        foreach (var player in _players)
+        {
+            var result = _gameRules.DetermineResult(player.Hand, _dealer.Hand);
+            results[player.Name] = result;
+        }
+
+        // Process payouts for all players
+        PayoutSummary? payoutSummary = null;
+        try
+        {
+            payoutSummary = await _bettingService.ProcessPayoutsAsync(results);
+        }
+        catch (Exception ex)
+        {
+            // Log the error but don't fail the game results
+            // In a production system, you'd want proper logging here
+            System.Diagnostics.Debug.WriteLine($"Error processing payouts: {ex.Message}");
+        }
+
+        _currentPhase = GamePhase.GameOver;
+
+        return new GameSummary(results, _dealer.Hand, DateTime.UtcNow, payoutSummary);
+    }
+
     /// <inheritdoc />
     public GameState? GetCurrentGameState()
     {
