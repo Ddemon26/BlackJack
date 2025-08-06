@@ -86,6 +86,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRandomProvider, SystemRandomProvider>();
         services.AddSingleton<IInputProvider, ConsoleInputProvider>();
         services.AddSingleton<IOutputProvider, ConsoleOutputProvider>();
+        services.AddSingleton<GroupProject.Domain.Interfaces.IConfigurationManager, GroupProject.Infrastructure.Providers.ConfigurationManager>();
         
         return services;
     }

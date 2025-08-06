@@ -116,6 +116,92 @@ public class GameConfiguration
     public bool SaveStatistics { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether to allow late surrender.
+    /// </summary>
+    public bool AllowLateSurrender { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to allow early surrender.
+    /// </summary>
+    public bool AllowEarlySurrender { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the maximum number of hands a player can have after splitting.
+    /// </summary>
+    [Range(2, 4, ErrorMessage = "Maximum split hands must be between 2 and 4.")]
+    public int MaxSplitHands { get; set; } = 4;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether doubling after split is allowed.
+    /// </summary>
+    public bool AllowDoubleAfterSplit { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether resplitting Aces is allowed.
+    /// </summary>
+    public bool AllowResplitAces { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether hitting split Aces is allowed.
+    /// </summary>
+    public bool AllowHitSplitAces { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the insurance payout ratio (e.g., 2.0 for 2:1 payout).
+    /// </summary>
+    [Range(1.5, 3.0, ErrorMessage = "Insurance payout must be between 1.5 and 3.0.")]
+    public double InsurancePayout { get; set; } = 2.0;
+
+    /// <summary>
+    /// Gets or sets the surrender payout ratio (e.g., 0.5 for half bet back).
+    /// </summary>
+    [Range(0.25, 0.75, ErrorMessage = "Surrender payout must be between 0.25 and 0.75.")]
+    public double SurrenderPayout { get; set; } = 0.5;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to show card count hints (for educational purposes).
+    /// </summary>
+    public bool ShowCardCountHints { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to show basic strategy hints.
+    /// </summary>
+    public bool ShowBasicStrategyHints { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the delay in milliseconds between card deals for dramatic effect.
+    /// </summary>
+    [Range(0, 5000, ErrorMessage = "Deal delay must be between 0 and 5000 milliseconds.")]
+    public int DealDelayMs { get; set; } = 500;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to use sound effects.
+    /// </summary>
+    public bool EnableSoundEffects { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to enable debug mode with additional logging.
+    /// </summary>
+    public bool DebugMode { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the session timeout in minutes for automatic session ending.
+    /// </summary>
+    [Range(5, 480, ErrorMessage = "Session timeout must be between 5 and 480 minutes.")]
+    public int SessionTimeoutMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to automatically save session progress.
+    /// </summary>
+    public bool AutoSaveSession { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the frequency of auto-save in rounds.
+    /// </summary>
+    [Range(1, 50, ErrorMessage = "Auto-save frequency must be between 1 and 50 rounds.")]
+    public int AutoSaveFrequency { get; set; } = 5;
+
+    /// <summary>
     /// Validates the configuration and returns any validation errors.
     /// </summary>
     /// <returns>A collection of validation results, empty if configuration is valid.</returns>
@@ -174,6 +260,49 @@ public class GameConfiguration
                 new[] { nameof(MinimumBet), nameof(MaximumBet), nameof(DefaultBankroll), nameof(MinimumBankroll), nameof(MaximumBankroll) }));
         }
 
+        // Advanced rule validation
+        if (AllowEarlySurrender && AllowLateSurrender)
+        {
+            validationResults.Add(new ValidationResult(
+                "Cannot enable both early and late surrender simultaneously.",
+                new[] { nameof(AllowEarlySurrender), nameof(AllowLateSurrender) }));
+        }
+
+        if (AllowResplitAces && !AllowSplit)
+        {
+            validationResults.Add(new ValidationResult(
+                "Cannot allow resplit Aces when splitting is disabled.",
+                new[] { nameof(AllowResplitAces), nameof(AllowSplit) }));
+        }
+
+        if (AllowHitSplitAces && !AllowSplit)
+        {
+            validationResults.Add(new ValidationResult(
+                "Cannot allow hitting split Aces when splitting is disabled.",
+                new[] { nameof(AllowHitSplitAces), nameof(AllowSplit) }));
+        }
+
+        if (AllowDoubleAfterSplit && !AllowSplit)
+        {
+            validationResults.Add(new ValidationResult(
+                "Cannot allow double after split when splitting is disabled.",
+                new[] { nameof(AllowDoubleAfterSplit), nameof(AllowSplit) }));
+        }
+
+        if ((AllowEarlySurrender || AllowLateSurrender) && !AllowSurrender)
+        {
+            validationResults.Add(new ValidationResult(
+                "Cannot enable surrender variations when surrender is disabled.",
+                new[] { nameof(AllowSurrender), nameof(AllowEarlySurrender), nameof(AllowLateSurrender) }));
+        }
+
+        if (ShowCardCountHints && NumberOfDecks == 1)
+        {
+            validationResults.Add(new ValidationResult(
+                "Card counting hints are not meaningful with single deck games.",
+                new[] { nameof(ShowCardCountHints), nameof(NumberOfDecks) }));
+        }
+
         return validationResults;
     }
 
@@ -209,7 +338,23 @@ public class GameConfiguration
             AutoReshuffleEnabled = AutoReshuffleEnabled,
             CardDisplayFormat = CardDisplayFormat,
             ShowDetailedStatistics = ShowDetailedStatistics,
-            SaveStatistics = SaveStatistics
+            SaveStatistics = SaveStatistics,
+            AllowLateSurrender = AllowLateSurrender,
+            AllowEarlySurrender = AllowEarlySurrender,
+            MaxSplitHands = MaxSplitHands,
+            AllowDoubleAfterSplit = AllowDoubleAfterSplit,
+            AllowResplitAces = AllowResplitAces,
+            AllowHitSplitAces = AllowHitSplitAces,
+            InsurancePayout = InsurancePayout,
+            SurrenderPayout = SurrenderPayout,
+            ShowCardCountHints = ShowCardCountHints,
+            ShowBasicStrategyHints = ShowBasicStrategyHints,
+            DealDelayMs = DealDelayMs,
+            EnableSoundEffects = EnableSoundEffects,
+            DebugMode = DebugMode,
+            SessionTimeoutMinutes = SessionTimeoutMinutes,
+            AutoSaveSession = AutoSaveSession,
+            AutoSaveFrequency = AutoSaveFrequency
         };
     }
 
@@ -220,7 +365,8 @@ public class GameConfiguration
     public override string ToString()
     {
         return $"GameConfiguration: {NumberOfDecks} decks, {MinPlayers}-{MaxPlayers} players, " +
-               $"DoubleDown: {AllowDoubleDown}, Split: {AllowSplit}, " +
+               $"DoubleDown: {AllowDoubleDown}, Split: {AllowSplit}, Surrender: {AllowSurrender}, " +
+               $"Insurance: {AllowInsurance}, DealerSoft17: {DealerHitsOnSoft17}, " +
                $"Penetration: {PenetrationThreshold:P1}, Payout: {BlackjackPayout:F1}:1";
     }
 }
