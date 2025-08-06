@@ -37,5 +37,28 @@ namespace GroupProject.Application.Interfaces
         /// <param name="exception">The exception to translate.</param>
         /// <returns>A user-friendly error message.</returns>
         string GetUserFriendlyMessage(Exception exception);
+
+        /// <summary>
+        /// Attempts to recover from an error using preserved state.
+        /// </summary>
+        /// <param name="exception">The exception that occurred.</param>
+        /// <param name="context">Additional context about the error.</param>
+        /// <returns>A task that returns true if recovery was successful, false otherwise.</returns>
+        Task<bool> TryRecoverFromErrorAsync(Exception exception, string context = "");
+
+        /// <summary>
+        /// Creates a checkpoint of the current game state for potential recovery.
+        /// </summary>
+        /// <param name="checkpointName">A descriptive name for the checkpoint.</param>
+        /// <param name="context">Additional context about when the checkpoint was created.</param>
+        /// <returns>A task that returns the checkpoint ID if successful, null otherwise.</returns>
+        Task<string?> CreateCheckpointAsync(string checkpointName, string context = "");
+
+        /// <summary>
+        /// Cleans up old error recovery states to prevent storage bloat.
+        /// </summary>
+        /// <param name="maxAge">The maximum age of states to keep.</param>
+        /// <returns>A task that returns the number of states cleaned up.</returns>
+        Task<int> CleanupOldRecoveryStatesAsync(TimeSpan? maxAge = null);
     }
 }

@@ -6,6 +6,7 @@ using GroupProject.Application.Services;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Infrastructure.Providers;
+using GroupProject.Infrastructure.Services;
 using GroupProject.Presentation.Console;
 using GroupProject.Infrastructure.ObjectPooling;
 
@@ -68,6 +69,10 @@ public static class ServiceCollectionExtensions
         // Register application services
         services.AddScoped<IGameService, GameService>();
         services.AddScoped<IGameOrchestrator, GameOrchestrator>();
+        services.AddSingleton<IGameStatePreserver, GroupProject.Infrastructure.Services.GameStatePreserver>();
+        services.AddSingleton<IGameLogger, GroupProject.Infrastructure.Services.GameLogger>();
+        services.AddSingleton<IGameMonitor, GroupProject.Infrastructure.Services.GameMonitor>();
+        services.AddTransient<DiagnosticCollector>();
         services.AddScoped<IErrorHandler, ErrorHandler>();
         
         // Register presentation services
@@ -126,6 +131,10 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IGameService, GameService>();
         services.AddScoped<IGameOrchestrator, GameOrchestrator>();
+        services.AddSingleton<IGameStatePreserver, GroupProject.Infrastructure.Services.GameStatePreserver>();
+        services.AddSingleton<IGameLogger, GroupProject.Infrastructure.Services.GameLogger>();
+        services.AddSingleton<IGameMonitor, GroupProject.Infrastructure.Services.GameMonitor>();
+        services.AddTransient<DiagnosticCollector>();
         services.AddScoped<IErrorHandler, ErrorHandler>();
         
         return services;
