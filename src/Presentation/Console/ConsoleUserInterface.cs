@@ -7,6 +7,7 @@ using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Domain.Events;
 using GroupProject.Infrastructure.Validation;
 using GroupProject.Infrastructure.Formatting;
 using GroupProject.Infrastructure.ObjectPooling;
@@ -368,5 +369,69 @@ public class ConsoleUserInterface : IUserInterface
         await _outputProvider.ClearAsync();
     }
 
+    /// <summary>
+    /// Shows a notification when the shoe is reshuffled.
+    /// </summary>
+    /// <param name="reshuffleEventArgs">The reshuffle event arguments containing details about the reshuffle.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when reshuffleEventArgs is null.</exception>
+    public async Task ShowShoeReshuffleNotificationAsync(ShoeReshuffleEventArgs reshuffleEventArgs)
+    {
+        if (reshuffleEventArgs == null)
+            throw new ArgumentNullException(nameof(reshuffleEventArgs));
 
+        await _outputProvider.WriteLineAsync();
+        await _outputProvider.WriteLineAsync("🔄 ═══════════════════════════════════════════════════════════════");
+        await _outputProvider.WriteLineAsync("🔄                    SHOE RESHUFFLED                           ");
+        await _outputProvider.WriteLineAsync("🔄 ═══════════════════════════════════════════════════════════════");
+        await _outputProvider.WriteLineAsync($"🔄 Reason: {reshuffleEventArgs.Reason}");
+        await _outputProvider.WriteLineAsync($"🔄 Cards remaining when triggered: {reshuffleEventArgs.RemainingPercentage:P1}");
+        await _outputProvider.WriteLineAsync($"🔄 Penetration threshold: {reshuffleEventArgs.PenetrationThreshold:P1}");
+        await _outputProvider.WriteLineAsync($"🔄 Time: {reshuffleEventArgs.Timestamp:HH:mm:ss}");
+        await _outputProvider.WriteLineAsync("🔄 The shoe has been shuffled and is ready for continued play.");
+        await _outputProvider.WriteLineAsync("🔄 ═══════════════════════════════════════════════════════════════");
+        await _outputProvider.WriteLineAsync();
+    }
+
+    /// <summary>
+    /// Shows the current shoe status when it's relevant to display.
+    /// </summary>
+    /// <param name="shoeStatus">The shoe status to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when shoeStatus is null.</exception>
+    public async Task ShowShoeStatusAsync(ShoeStatus shoeStatus)
+    {
+        if (shoeStatus == null)
+            throw new ArgumentNullException(nameof(shoeStatus));
+
+        await _outputProvider.WriteLineAsync();
+        await _outputProvider.WriteLineAsync("📊 ═══════════════════════════════════════════════════════════════");
+        await _outputProvider.WriteLineAsync("📊                     SHOE STATUS                              ");
+        await _outputProvider.WriteLineAsync("📊 ═══════════════════════════════════════════════════════════════");
+        await _outputProvider.WriteLineAsync($"📊 Decks: {shoeStatus.DeckCount}");
+        await _outputProvider.WriteLineAsync($"📊 Cards remaining: {shoeStatus.RemainingCards}/{shoeStatus.TotalCards} ({shoeStatus.RemainingPercentage:P1})");
+        await _outputProvider.WriteLineAsync($"📊 Cards dealt: {shoeStatus.CardsDealt}");
+        await _outputProvider.WriteLineAsync($"📊 Penetration threshold: {shoeStatus.PenetrationThreshold:P1}");
+        
+        if (shoeStatus.NeedsReshuffle)
+        {
+            await _outputProvider.WriteLineAsync("📊 ⚠️  RESHUFFLE NEEDED - Shoe has reached penetration threshold");
+        }
+        else if (shoeStatus.IsNearlyEmpty)
+        {
+            await _outputProvider.WriteLineAsync("📊 ⚠️  SHOE NEARLY EMPTY - Reshuffle will occur soon");
+        }
+        
+        if (shoeStatus.AutoReshuffleEnabled)
+        {
+            await _outputProvider.WriteLineAsync("📊 🔄 Automatic reshuffling: ENABLED");
+        }
+        else
+        {
+            await _outputProvider.WriteLineAsync("📊 🔄 Automatic reshuffling: DISABLED");
+        }
+        
+        await _outputProvider.WriteLineAsync("📊 ═══════════════════════════════════════════════════════════════");
+        await _outputProvider.WriteLineAsync();
+    }
 }

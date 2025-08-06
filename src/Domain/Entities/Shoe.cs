@@ -1,3 +1,4 @@
+using GroupProject.Domain.Events;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
 using GroupProject.Infrastructure.ObjectPooling;
@@ -12,6 +13,8 @@ public class Shoe : IShoe
     private readonly List<Card> _cards;
     private readonly int _deckCount;
     private readonly IRandomProvider _randomProvider;
+    private double _penetrationThreshold = 0.25;
+    private bool _autoReshuffleEnabled = true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Shoe"/> class with the specified number of decks.
@@ -49,6 +52,41 @@ public class Shoe : IShoe
     public bool IsEmpty => _cards.Count == 0;
 
     /// <summary>
+    /// Gets or sets the penetration threshold for automatic reshuffling.
+    /// </summary>
+    public double PenetrationThreshold
+    {
+        get => _penetrationThreshold;
+        set
+        {
+            if (value < 0.0 || value > 1.0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), "Penetration threshold must be between 0.0 and 1.0.");
+            }
+            _penetrationThreshold = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether automatic reshuffling is enabled.
+    /// </summary>
+    public bool AutoReshuffleEnabled
+    {
+        get => _autoReshuffleEnabled;
+        set => _autoReshuffleEnabled = value;
+    }
+
+    /// <summary>
+    /// Event raised when the shoe needs to be reshuffled.
+    /// </summary>
+    public event EventHandler<ShoeReshuffleEventArgs>? ReshuffleNeeded;
+
+    /// <summary>
+    /// Event raised when the shoe has been reshuffled.
+    /// </summary>
+    public event EventHandler<ShoeReshuffleEventArgs>? Reshuffled;
+
+    /// <summary>
     /// Draws a card from the shoe.
     /// </summary>
     /// <returns>The drawn card.</returns>
@@ -62,6 +100,10 @@ public class Shoe : IShoe
 
         var card = _cards[0];
         _cards.RemoveAt(0);
+
+        // Check if reshuffle is needed after drawing
+        CheckForReshuffleNeeded();
+
         return card;
     }
 
@@ -115,6 +157,59 @@ public class Shoe : IShoe
     public bool NeedsReshuffle(double penetrationThreshold = 0.25)
     {
         return GetRemainingPercentage() < penetrationThreshold;
+    }
+
+    /// <summary>
+    /// Manually triggers a reshuffle of the shoe.
+    /// </summary>
+    /// <param name="reason">The reason for the manual reshuffle.</param>
+    public void TriggerReshuffle(string reason = "Manual reshuffle")
+    {
+        var remainingPercentage = GetRemainingPercentage();
+        
+        Reset();
+        
+        OnReshuffled(new ShoeReshuffleEventArgs(remainingPercentage, _penetrationThreshold, reason));
+    }
+
+    /// <summary>
+    /// Checks if the shoe needs reshuffling and raises the appropriate event.
+    /// </summary>
+    private void CheckForReshuffleNeeded()
+    {
+        if (!_autoReshuffleEnabled)
+        {
+            return;
+        }
+
+        if (NeedsReshuffle(_penetrationThreshold))
+        {
+            var remainingPercentage = GetRemainingPercentage();
+            var eventArgs = new ShoeReshuffleEventArgs(
+                remainingPercentage, 
+                _penetrationThreshold, 
+                "Automatic reshuffle triggered by penetration threshold");
+
+            OnReshuffleNeeded(eventArgs);
+        }
+    }
+
+    /// <summary>
+    /// Raises the ReshuffleNeeded event.
+    /// </summary>
+    /// <param name="e">The event arguments.</param>
+    protected virtual void OnReshuffleNeeded(ShoeReshuffleEventArgs e)
+    {
+        ReshuffleNeeded?.Invoke(this, e);
+    }
+
+    /// <summary>
+    /// Raises the Reshuffled event.
+    /// </summary>
+    /// <param name="e">The event arguments.</param>
+    protected virtual void OnReshuffled(ShoeReshuffleEventArgs e)
+    {
+        Reshuffled?.Invoke(this, e);
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.ValueObjects;
+using GroupProject.Domain.Events;
 
 namespace GroupProject.Application.Interfaces;
 
@@ -83,4 +84,18 @@ public interface IUserInterface
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task ClearDisplayAsync();
+
+    /// <summary>
+    /// Shows a notification when the shoe is reshuffled.
+    /// </summary>
+    /// <param name="reshuffleEventArgs">The reshuffle event arguments containing details about the reshuffle.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task ShowShoeReshuffleNotificationAsync(ShoeReshuffleEventArgs reshuffleEventArgs);
+
+    /// <summary>
+    /// Shows the current shoe status when it's relevant to display.
+    /// </summary>
+    /// <param name="shoeStatus">The shoe status to display.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task ShowShoeStatusAsync(ShoeStatus shoeStatus);
 }

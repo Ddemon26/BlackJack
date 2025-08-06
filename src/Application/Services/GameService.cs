@@ -1,6 +1,7 @@
 using GroupProject.Application.Interfaces;
 using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
+using GroupProject.Domain.Events;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.Services;
 using GroupProject.Domain.ValueObjects;
@@ -17,6 +18,7 @@ public class GameService : IGameService
     private readonly IGameRules _gameRules;
     private readonly SplitHandManager _splitHandManager;
     private readonly IBettingService _bettingService;
+    private readonly IShoeManager _shoeManager;
     private readonly List<Player> _players = new();
     private readonly Dictionary<string, List<PlayerHand>> _playerHands = new();
     private readonly Dictionary<string, int> _currentHandIndex = new();
@@ -32,13 +34,18 @@ public class GameService : IGameService
     /// <param name="shoe">The shoe containing cards for the game.</param>
     /// <param name="gameRules">The game rules implementation.</param>
     /// <param name="bettingService">The betting service for handling bets and bankrolls.</param>
+    /// <param name="shoeManager">The shoe manager for handling automatic reshuffling.</param>
     /// <param name="splitHandManager">The split hand manager for handling split operations.</param>
-    public GameService(IShoe shoe, IGameRules gameRules, IBettingService bettingService, SplitHandManager? splitHandManager = null)
+    public GameService(IShoe shoe, IGameRules gameRules, IBettingService bettingService, IShoeManager? shoeManager = null, SplitHandManager? splitHandManager = null)
     {
         _shoe = shoe ?? throw new ArgumentNullException(nameof(shoe));
         _gameRules = gameRules ?? throw new ArgumentNullException(nameof(gameRules));
         _bettingService = bettingService ?? throw new ArgumentNullException(nameof(bettingService));
+        _shoeManager = shoeManager ?? new ShoeManager(_shoe);
         _splitHandManager = splitHandManager ?? new SplitHandManager();
+
+        // Subscribe to shoe reshuffle events
+        _shoeManager.ReshuffleOccurred += OnShoeReshuffled;
     }
 
     /// <inheritdoc />
@@ -46,6 +53,9 @@ public class GameService : IGameService
 
     /// <inheritdoc />
     public bool IsGameInProgress => _currentPhase != GamePhase.Setup && _currentPhase != GamePhase.GameOver;
+
+    /// <inheritdoc />
+    public event EventHandler<ShoeReshuffleEventArgs>? ShoeReshuffled;
 
     /// <inheritdoc />
     public void StartNewGame(IEnumerable<string> playerNames)
@@ -309,6 +319,12 @@ public class GameService : IGameService
             throw new InvalidOperationException("Cannot deal initial cards. Game must be in InitialDeal phase.");
         }
 
+        // Check if shoe needs reshuffling before dealing
+        if (_shoeManager.IsReshuffleNeeded())
+        {
+            _shoeManager.HandleAutomaticReshuffle();
+        }
+
         if (_shoe.RemainingCards < (_players.Count + 1) * 2)
         {
             throw new InvalidOperationException("Not enough cards in the shoe to deal initial cards.");
@@ -419,6 +435,12 @@ public class GameService : IGameService
         // Dealer plays according to standard rules: hit on 16, stand on 17
         while (_gameRules.ShouldDealerHit(_dealer.GetHandValue()) && !_dealer.IsBusted())
         {
+            // Check if shoe needs reshuffling before drawing
+            if (_shoeManager.IsReshuffleNeeded())
+            {
+                _shoeManager.HandleAutomaticReshuffle();
+            }
+
             if (_shoe.IsEmpty)
             {
                 throw new InvalidOperationException("Shoe is empty, cannot continue dealer turn.");
@@ -552,6 +574,12 @@ public class GameService : IGameService
 
     private PlayerActionResult ProcessHitAction(Player player)
     {
+        // Check if shoe needs reshuffling before drawing
+        if (_shoeManager.IsReshuffleNeeded())
+        {
+            _shoeManager.HandleAutomaticReshuffle();
+        }
+
         if (_shoe.IsEmpty)
         {
             return PlayerActionResult.Failure("No more cards available in the shoe.");
@@ -588,6 +616,12 @@ public class GameService : IGameService
         if (!CanPlayerDoubleDown(player))
         {
             return PlayerActionResult.Failure("Cannot double down. Player must have exactly 2 cards and sufficient funds.");
+        }
+
+        // Check if shoe needs reshuffling before drawing
+        if (_shoeManager.IsReshuffleNeeded())
+        {
+            _shoeManager.HandleAutomaticReshuffle();
         }
 
         if (_shoe.IsEmpty)
@@ -840,6 +874,12 @@ public class GameService : IGameService
             return PlayerActionResult.Failure("Cannot split. Player must have exactly 2 cards of the same rank and sufficient funds.");
         }
 
+        // Check if shoe needs reshuffling before drawing
+        if (_shoeManager.IsReshuffleNeeded())
+        {
+            _shoeManager.HandleAutomaticReshuffle();
+        }
+
         if (_shoe.RemainingCards < 2)
         {
             return PlayerActionResult.Failure("Not enough cards available in the shoe to split.");
@@ -1018,5 +1058,40 @@ public class GameService : IGameService
         }
 
         return hands.All(h => h.IsBusted);
+    }
+
+    /// <inheritdoc />
+    public ShoeStatus GetShoeStatus()
+    {
+        return new ShoeStatus(
+            _shoe.DeckCount,
+            _shoe.RemainingCards,
+            _shoe.GetRemainingPercentage(),
+            _shoeManager.PenetrationThreshold,
+            _shoeManager.IsReshuffleNeeded(),
+            _shoeManager.AutoReshuffleEnabled);
+    }
+
+    /// <inheritdoc />
+    public bool IsShoeReshuffleNeeded()
+    {
+        return _shoeManager.IsReshuffleNeeded();
+    }
+
+    /// <inheritdoc />
+    public void TriggerShoeReshuffle(string reason = "Manual reshuffle")
+    {
+        _shoeManager.TriggerManualReshuffle(reason);
+    }
+
+    /// <summary>
+    /// Handles shoe reshuffle events from the shoe manager.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OnShoeReshuffled(object? sender, ShoeReshuffleEventArgs e)
+    {
+        // Forward the event to subscribers
+        ShoeReshuffled?.Invoke(this, e);
     }
 }

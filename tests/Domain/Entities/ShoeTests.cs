@@ -1,4 +1,5 @@
 using GroupProject.Domain.Entities;
+using GroupProject.Domain.Events;
 using GroupProject.Domain.Interfaces;
 using GroupProject.Domain.ValueObjects;
 using Moq;
@@ -332,5 +333,237 @@ public class ShoeTests
 
         // Assert
         Assert.Equal(originalDeckCount, shoe.DeckCount);
+    }
+
+    // Enhanced Shoe Tests for Automatic Reshuffling
+
+    [Fact]
+    public void PenetrationThreshold_DefaultValue_IsQuarter()
+    {
+        // Arrange & Act
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+
+        // Assert
+        Assert.Equal(0.25, shoe.PenetrationThreshold);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.1)]
+    [InlineData(0.5)]
+    [InlineData(0.75)]
+    [InlineData(1.0)]
+    public void PenetrationThreshold_SetValidValue_UpdatesCorrectly(double threshold)
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+
+        // Act
+        shoe.PenetrationThreshold = threshold;
+
+        // Assert
+        Assert.Equal(threshold, shoe.PenetrationThreshold);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    [InlineData(2.0)]
+    public void PenetrationThreshold_SetInvalidValue_ThrowsArgumentOutOfRangeException(double invalidThreshold)
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+
+        // Act & Assert
+        Assert.Throws<ArgumentOutOfRangeException>(() => shoe.PenetrationThreshold = invalidThreshold);
+    }
+
+    [Fact]
+    public void AutoReshuffleEnabled_DefaultValue_IsTrue()
+    {
+        // Arrange & Act
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+
+        // Assert
+        Assert.True(shoe.AutoReshuffleEnabled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AutoReshuffleEnabled_SetValue_UpdatesCorrectly(bool enabled)
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+
+        // Act
+        shoe.AutoReshuffleEnabled = enabled;
+
+        // Assert
+        Assert.Equal(enabled, shoe.AutoReshuffleEnabled);
+    }
+
+    [Fact]
+    public void ReshuffleNeeded_Event_RaisedWhenThresholdReached()
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+        shoe.PenetrationThreshold = 0.5; // 50% threshold
+        var eventRaised = false;
+        ShoeReshuffleEventArgs? eventArgs = null;
+
+        shoe.ReshuffleNeeded += (sender, e) =>
+        {
+            eventRaised = true;
+            eventArgs = e;
+        };
+
+        // Act - Draw cards to reach threshold
+        for (int i = 0; i < 27; i++) // Leave 25 cards (48%)
+        {
+            shoe.Draw();
+        }
+
+        // Assert
+        Assert.True(eventRaised);
+        Assert.NotNull(eventArgs);
+        Assert.Contains("Automatic reshuffle triggered", eventArgs.Reason);
+        Assert.Equal(0.5, eventArgs.PenetrationThreshold);
+    }
+
+    [Fact]
+    public void ReshuffleNeeded_Event_NotRaisedWhenAutoReshuffleDisabled()
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+        shoe.AutoReshuffleEnabled = false;
+        shoe.PenetrationThreshold = 0.5;
+        var eventRaised = false;
+
+        shoe.ReshuffleNeeded += (sender, e) => eventRaised = true;
+
+        // Act - Draw cards to reach threshold
+        for (int i = 0; i < 27; i++) // Leave 25 cards (48%)
+        {
+            shoe.Draw();
+        }
+
+        // Assert
+        Assert.False(eventRaised);
+    }
+
+    [Fact]
+    public void TriggerReshuffle_WithDefaultReason_RaisesReshuffledEvent()
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+        var eventRaised = false;
+        ShoeReshuffleEventArgs? eventArgs = null;
+
+        shoe.Reshuffled += (sender, e) =>
+        {
+            eventRaised = true;
+            eventArgs = e;
+        };
+
+        // Draw some cards first
+        for (int i = 0; i < 10; i++)
+        {
+            shoe.Draw();
+        }
+
+        // Act
+        shoe.TriggerReshuffle();
+
+        // Assert
+        Assert.True(eventRaised);
+        Assert.NotNull(eventArgs);
+        Assert.Equal("Manual reshuffle", eventArgs.Reason);
+        Assert.Equal(52, shoe.RemainingCards); // Should be reset to full
+    }
+
+    [Fact]
+    public void TriggerReshuffle_WithCustomReason_RaisesReshuffledEventWithReason()
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+        var customReason = "End of round reshuffle";
+        var eventRaised = false;
+        ShoeReshuffleEventArgs? eventArgs = null;
+
+        shoe.Reshuffled += (sender, e) =>
+        {
+            eventRaised = true;
+            eventArgs = e;
+        };
+
+        // Act
+        shoe.TriggerReshuffle(customReason);
+
+        // Assert
+        Assert.True(eventRaised);
+        Assert.NotNull(eventArgs);
+        Assert.Equal(customReason, eventArgs.Reason);
+    }
+
+    [Fact]
+    public void TriggerReshuffle_ResetsShoeToFullDeck()
+    {
+        // Arrange
+        var shoe = new Shoe(2, _mockRandomProvider.Object);
+        
+        // Draw half the cards
+        for (int i = 0; i < 52; i++)
+        {
+            shoe.Draw();
+        }
+        
+        Assert.Equal(52, shoe.RemainingCards); // Verify we drew cards
+
+        // Act
+        shoe.TriggerReshuffle("Test reshuffle");
+
+        // Assert
+        Assert.Equal(104, shoe.RemainingCards); // Should be back to full 2-deck shoe
+        Assert.Equal(1.0, shoe.GetRemainingPercentage()); // 100%
+    }
+
+    [Fact]
+    public void Draw_WhenAutoReshuffleEnabled_ChecksForReshuffleNeeded()
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+        shoe.PenetrationThreshold = 0.9; // Very high threshold to trigger easily
+        var reshuffleNeededEventCount = 0;
+
+        shoe.ReshuffleNeeded += (sender, e) => reshuffleNeededEventCount++;
+
+        // Act - Draw cards to trigger reshuffle check
+        for (int i = 0; i < 10; i++) // Draw 10 cards (80% remaining)
+        {
+            shoe.Draw();
+        }
+
+        // Assert
+        Assert.True(reshuffleNeededEventCount > 0);
+    }
+
+    [Fact]
+    public void Multiple_Events_CanBeSubscribed()
+    {
+        // Arrange
+        var shoe = new Shoe(1, _mockRandomProvider.Object);
+        var reshuffleNeededCount = 0;
+        var reshuffledCount = 0;
+
+        shoe.ReshuffleNeeded += (sender, e) => reshuffleNeededCount++;
+        shoe.Reshuffled += (sender, e) => reshuffledCount++;
+
+        // Act
+        shoe.TriggerReshuffle("Test multiple events");
+
+        // Assert
+        Assert.Equal(1, reshuffledCount);
+        // ReshuffleNeeded might or might not be called depending on the state
     }
 }

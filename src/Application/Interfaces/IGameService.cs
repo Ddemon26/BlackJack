@@ -1,5 +1,6 @@
 using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
+using GroupProject.Domain.Events;
 using GroupProject.Domain.ValueObjects;
 
 namespace GroupProject.Application.Interfaces;
@@ -161,4 +162,27 @@ public interface IGameService
     /// </summary>
     /// <returns>True if all players have placed bets, false otherwise.</returns>
     bool AllPlayersHaveBets();
+
+    /// <summary>
+    /// Gets the current shoe status information.
+    /// </summary>
+    /// <returns>Information about the current shoe state.</returns>
+    ShoeStatus GetShoeStatus();
+
+    /// <summary>
+    /// Checks if the shoe needs reshuffling based on the current penetration threshold.
+    /// </summary>
+    /// <returns>True if the shoe needs reshuffling, false otherwise.</returns>
+    bool IsShoeReshuffleNeeded();
+
+    /// <summary>
+    /// Manually triggers a shoe reshuffle.
+    /// </summary>
+    /// <param name="reason">The reason for the manual reshuffle.</param>
+    void TriggerShoeReshuffle(string reason = "Manual reshuffle");
+
+    /// <summary>
+    /// Event raised when the shoe is reshuffled.
+    /// </summary>
+    event EventHandler<ShoeReshuffleEventArgs>? ShoeReshuffled;
 }

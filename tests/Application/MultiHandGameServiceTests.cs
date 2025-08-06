@@ -31,7 +31,7 @@ public class MultiHandGameServiceTests
         _mockBettingService.Setup(bs => bs.MaximumBet).Returns(Money.FromUsd(500.00m));
         _mockBettingService.Setup(bs => bs.BlackjackMultiplier).Returns(1.5m);
         
-        _gameService = new GameService(_mockShoe.Object, _mockGameRules.Object, _mockBettingService.Object, _splitHandManager);
+        _gameService = new GameService(_mockShoe.Object, _mockGameRules.Object, _mockBettingService.Object, null, _splitHandManager);
     }
 
     [Fact]

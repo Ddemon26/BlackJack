@@ -3,6 +3,7 @@ using GroupProject.Application.Models;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.ValueObjects;
 using GroupProject.Domain.Exceptions;
+using GroupProject.Domain.Events;
 
 namespace GroupProject.Application.Services;
 
@@ -26,6 +27,9 @@ public class GameOrchestrator : IGameOrchestrator
         _gameService = gameService ?? throw new ArgumentNullException(nameof(gameService));
         _userInterface = userInterface ?? throw new ArgumentNullException(nameof(userInterface));
         _errorHandler = errorHandler ?? throw new ArgumentNullException(nameof(errorHandler));
+        
+        // Subscribe to shoe reshuffle events
+        _gameService.ShoeReshuffled += OnShoeReshuffled;
     }
 
     /// <inheritdoc />
@@ -83,6 +87,9 @@ public class GameOrchestrator : IGameOrchestrator
             {
                 try
                 {
+                    // Check if shoe needs reshuffling before starting a new round
+                    await CheckAndHandleShoeReshuffleAsync();
+                    
                     await RunGameAsync();
                 }
                 catch (Exception ex) when (_errorHandler.IsRecoverableError(ex))
@@ -297,6 +304,13 @@ public class GameOrchestrator : IGameOrchestrator
         if (gameState != null)
         {
             await _userInterface.ShowGameStateAsync(gameState);
+            
+            // Show shoe status if it's getting low
+            var shoeStatus = _gameService.GetShoeStatus();
+            if (shoeStatus.NeedsReshuffle || shoeStatus.IsNearlyEmpty)
+            {
+                await _userInterface.ShowShoeStatusAsync(shoeStatus);
+            }
         }
     }
 
@@ -324,5 +338,47 @@ public class GameOrchestrator : IGameOrchestrator
     {
         var userMessage = await _errorHandler.HandleExceptionAsync(exception, context);
         await _userInterface.ShowErrorMessageAsync(userMessage);
+    }
+
+    /// <summary>
+    /// Handles shoe reshuffle events by notifying the user interface.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The shoe reshuffle event arguments.</param>
+    private async void OnShoeReshuffled(object? sender, ShoeReshuffleEventArgs e)
+    {
+        try
+        {
+            await _userInterface.ShowShoeReshuffleNotificationAsync(e);
+        }
+        catch (Exception ex)
+        {
+            // Log the error but don't let it crash the game
+            await HandleGameExceptionAsync(ex, "OnShoeReshuffled");
+        }
+    }
+
+    /// <summary>
+    /// Checks if the shoe needs reshuffling and handles it before starting a new round.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task CheckAndHandleShoeReshuffleAsync()
+    {
+        try
+        {
+            var shoeStatus = _gameService.GetShoeStatus();
+            
+            // If shoe needs reshuffling or is nearly empty, trigger a manual reshuffle
+            if (shoeStatus.NeedsReshuffle || shoeStatus.IsNearlyEmpty)
+            {
+                await _userInterface.ShowMessageAsync("Preparing shoe for next round...");
+                _gameService.TriggerShoeReshuffle("Pre-round reshuffle - ensuring adequate cards for gameplay");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log the error but don't let it prevent the game from starting
+            await HandleGameExceptionAsync(ex, "CheckAndHandleShoeReshuffleAsync");
+        }
     }
 }
