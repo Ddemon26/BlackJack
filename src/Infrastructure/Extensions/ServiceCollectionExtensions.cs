@@ -5,6 +5,7 @@ using GroupProject.Application.Models;
 using GroupProject.Application.Services;
 using GroupProject.Domain.Entities;
 using GroupProject.Domain.Interfaces;
+using GroupProject.Domain.Services;
 using GroupProject.Infrastructure.Providers;
 using GroupProject.Infrastructure.Services;
 using GroupProject.Presentation.Console;
@@ -48,6 +49,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRandomProvider, SystemRandomProvider>();
         services.AddSingleton<IInputProvider, ConsoleInputProvider>();
         services.AddSingleton<IOutputProvider, ConsoleOutputProvider>();
+        services.AddSingleton<GroupProject.Domain.Interfaces.IConfigurationManager, GroupProject.Infrastructure.Providers.ConfigurationManager>();
         
         // Register object pools for performance optimization
         services.AddSingleton(typeof(IObjectPool<>), typeof(DefaultObjectPool<>));
@@ -74,6 +76,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGameMonitor, GroupProject.Infrastructure.Services.GameMonitor>();
         services.AddTransient<DiagnosticCollector>();
         services.AddScoped<IErrorHandler, ErrorHandler>();
+        
+        // Register new services for enhanced functionality
+        services.AddScoped<GroupProject.Domain.Interfaces.IBettingService, GroupProject.Domain.Services.BettingService>();
+        services.AddScoped<GroupProject.Domain.Interfaces.ISessionManager, GroupProject.Application.Services.SessionManager>();
+        services.AddScoped<GroupProject.Application.Interfaces.IStatisticsService, GroupProject.Application.Services.StatisticsService>();
+        services.AddSingleton<GroupProject.Domain.Interfaces.IStatisticsRepository, GroupProject.Infrastructure.Providers.StatisticsRepository>();
+        services.AddScoped<GroupProject.Domain.Interfaces.IShoeManager, GroupProject.Domain.Services.ShoeManager>();
+        
+        // Register utility services
+        services.AddTransient<GroupProject.Domain.Services.SplitHandManager>();
+        services.AddTransient<GroupProject.Domain.Services.PlayerActionValidator>();
         
         // Register presentation services
         services.AddScoped<IUserInterface, ConsoleUserInterface>();
@@ -136,6 +149,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGameMonitor, GroupProject.Infrastructure.Services.GameMonitor>();
         services.AddTransient<DiagnosticCollector>();
         services.AddScoped<IErrorHandler, ErrorHandler>();
+        
+        // Register new services for enhanced functionality
+        services.AddScoped<GroupProject.Domain.Interfaces.IBettingService, GroupProject.Domain.Services.BettingService>();
+        services.AddScoped<GroupProject.Domain.Interfaces.ISessionManager, GroupProject.Application.Services.SessionManager>();
+        services.AddScoped<GroupProject.Application.Interfaces.IStatisticsService, GroupProject.Application.Services.StatisticsService>();
+        services.AddSingleton<GroupProject.Domain.Interfaces.IStatisticsRepository, GroupProject.Infrastructure.Providers.StatisticsRepository>();
+        services.AddScoped<GroupProject.Domain.Interfaces.IShoeManager, GroupProject.Domain.Services.ShoeManager>();
+        
+        // Register utility services
+        services.AddTransient<GroupProject.Domain.Services.SplitHandManager>();
+        services.AddTransient<GroupProject.Domain.Services.PlayerActionValidator>();
         
         return services;
     }
