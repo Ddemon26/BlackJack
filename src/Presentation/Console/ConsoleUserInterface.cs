@@ -118,7 +118,7 @@ public class ConsoleUserInterface : IUserInterface
         {
             await _outputProvider.WriteLineAsync($"  Bankroll: {MoneyFormatter.FormatWithSymbol(player.Bankroll)}");
             
-            if (player.HasActiveBet)
+            if (player.HasActiveBet && player.CurrentBet != null)
             {
                 var bet = player.CurrentBet;
                 var betTypeText = bet.Type == BetType.Standard ? "" : $" ({bet.Type})";

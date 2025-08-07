@@ -166,7 +166,7 @@ public class GameLogger : IGameLogger
     /// <param name="context">Optional context information.</param>
     /// <param name="properties">Optional structured properties.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    private async Task WriteLogEntryAsync(LogLevel level, string message, Exception? exception, string? context, IDictionary<string, object>? properties)
+    private Task WriteLogEntryAsync(LogLevel level, string message, Exception? exception, string? context, IDictionary<string, object>? properties)
     {
         try
         {
@@ -209,6 +209,8 @@ public class GameLogger : IGameLogger
             Console.WriteLine($"[GameLogger] Failed to write log entry: {ex.Message}");
             Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] [{level}] {message}");
         }
+        
+        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -265,7 +265,6 @@ namespace GroupProject.Infrastructure.Providers
             var effectiveMaxBet = availableFunds < maxBet ? availableFunds : maxBet;
 
             var attempts = 0;
-            const int maxAttempts = 5;
 
             while (true)
             {
@@ -342,7 +341,6 @@ namespace GroupProject.Infrastructure.Providers
                 throw new ArgumentException("Default amount must be within the specified range.");
 
             var attempts = 0;
-            const int maxAttempts = 5;
 
             await _outputProvider.WriteLineAsync($"Setting up bankroll for {playerName}:");
             await _outputProvider.WriteLineAsync($"Range: {MoneyFormatter.FormatWithSymbol(minAmount)} - {MoneyFormatter.FormatWithSymbol(maxAmount)}");

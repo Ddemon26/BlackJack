@@ -219,7 +219,7 @@ public class GameStatePreserver : IGameStatePreserver
     }
 
     /// <inheritdoc />
-    public async Task<int> ClearOldStatesAsync(TimeSpan maxAge)
+    public Task<int> ClearOldStatesAsync(TimeSpan maxAge)
     {
         var cutoffTime = DateTime.UtcNow - maxAge;
         var clearedCount = 0;
@@ -269,7 +269,7 @@ public class GameStatePreserver : IGameStatePreserver
             _logger?.LogError(ex, "Failed to clear old game states");
         }
 
-        return clearedCount;
+        return Task.FromResult(clearedCount);
     }
 
     /// <inheritdoc />
